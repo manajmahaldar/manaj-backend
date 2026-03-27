@@ -1,0 +1,16 @@
+const express = require('express');
+const router = express.Router();
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+const authController = require('../controllers/authController');
+require('dotenv').config();
+
+// @route   POST api/auth/register
+// @desc    Register user
+router.post('/register', authController.register);
+
+// @route   POST api/auth/login
+// @desc    Login user
+router.post('/login', authController.login);
+
+module.exports = router;
