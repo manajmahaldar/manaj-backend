@@ -1,9 +1,14 @@
 const Listing = require('../models/Listing');
+const { uploadToCloudinary } = require('../config/cloudinary');
 
 exports.createListing = async (req, res) => {
     try {
         const { productName, category, price, district, description, phoneNumber, quantity, unit } = req.body;
-        const photos = req.files ? req.files.map(file => file.path) : [];
+        
+        // Upload each file buffer to Cloudinary, then collect URLs
+        const photos = req.files && req.files.length > 0
+            ? await Promise.all(req.files.map(file => uploadToCloudinary(file.buffer).then(r => r.secure_url)))
+            : [];
 
         // Role-based category validation
         if (req.user.role === 'seller' && !['Feed', 'Medicine'].includes(category)) {
@@ -115,7 +120,9 @@ exports.updateListing = async (req, res) => {
         };
 
         if (req.files && req.files.length > 0) {
-            updateFields.photos = req.files.map(file => file.path);
+            updateFields.photos = await Promise.all(
+                req.files.map(file => uploadToCloudinary(file.buffer).then(r => r.secure_url))
+            );
         }
 
         const listing = await Listing.findOneAndUpdate(

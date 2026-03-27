@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const BuyingPost = require('../models/BuyingPost');
 const { auth, admin } = require('../middlewares/auth');
-const { upload } = require('../config/cloudinary');
+const { upload, uploadToCloudinary } = require('../config/cloudinary');
 
 // @route   POST api/posts
 // @desc    Create a buying post
@@ -21,7 +21,9 @@ router.post('/', auth, (req, res, next) => {
         }
 
         const { category, fishName, size, requiredQuantity, buyingPrice, district, phoneNumber } = req.body;
-        const photos = req.files ? req.files.map(file => file.path) : [];
+        const photos = req.files && req.files.length > 0
+            ? await Promise.all(req.files.map(file => uploadToCloudinary(file.buffer).then(r => r.secure_url)))
+            : [];
         
         const newPost = new BuyingPost({
             traderId: req.user.id,
@@ -74,7 +76,9 @@ router.put('/:id', auth, (req, res, next) => {
 
         let updateFields = { category, fishName, size, requiredQuantity, buyingPrice, district, phoneNumber };
         if (req.files && req.files.length > 0) {
-            updateFields.photos = req.files.map(file => file.path);
+            updateFields.photos = await Promise.all(
+                req.files.map(file => uploadToCloudinary(file.buffer).then(r => r.secure_url))
+            );
         }
 
         post = await BuyingPost.findByIdAndUpdate(

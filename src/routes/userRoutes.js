@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middlewares/auth').auth;
-const { upload } = require('../config/cloudinary');
+const { upload, uploadToCloudinary } = require('../config/cloudinary');
 const User = require('../models/User');
 
 // @route   POST api/users/profile-picture
@@ -18,12 +18,15 @@ router.post('/profile-picture', auth, upload.single('image'), async (req, res) =
             return res.status(404).json({ msg: 'User not found' });
         }
 
-        user.profilePicture = req.file.path;
+        const result = await uploadToCloudinary(req.file.buffer, { folder: 'fish_marketplace/profiles' });
+        const imageUrl = result.secure_url;
+
+        user.profilePicture = imageUrl;
         await user.save();
 
         res.json({ 
             msg: 'Profile picture updated successfully', 
-            profilePicture: req.file.path 
+            profilePicture: imageUrl
         });
     } catch (err) {
         console.error(err.message);
