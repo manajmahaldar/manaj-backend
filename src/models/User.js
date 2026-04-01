@@ -3,13 +3,15 @@ const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
     name: { type: String, required: true },
-    phone: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
-    district: { type: String, required: true },
+    email: { type: String, unique: true, sparse: true },
+    googleId: { type: String, unique: true, sparse: true },
+    phone: { type: String, unique: true, sparse: true },
+    password: { type: String, required: function() { return !this.googleId; } },
+    district: { type: String, required: function() { return !this.googleId; } },
     role: { 
         type: String, 
-        enum: ['farmer', 'seller', 'trader', 'admin'], 
-        required: true 
+        enum: ['farmer', 'seller', 'trader', 'hatchery', 'admin'], 
+        default: 'farmer'
     },
     verifiedStatus: { type: Boolean, default: false },
     accountStatus: { 
@@ -22,7 +24,7 @@ const userSchema = new mongoose.Schema({
 });
 
 userSchema.pre('save', async function() {
-    if (!this.isModified('password')) return;
+    if (!this.password || !this.isModified('password')) return;
     this.password = await bcrypt.hash(this.password, 10);
 });
 

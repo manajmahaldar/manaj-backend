@@ -17,6 +17,9 @@ exports.createListing = async (req, res) => {
         if (req.user.role === 'farmer' && !['Fish', 'Spawn/Seed'].includes(category)) {
             return res.status(403).json({ msg: 'Farmers can only post Fish or Spawn/Seed' });
         }
+        if (req.user.role === 'hatchery' && category !== 'Spawn/Seed') {
+            return res.status(403).json({ msg: 'Hatcheries can only post Spawn/Seed' });
+        }
 
         const newListing = new Listing({
             sellerId: req.user.id,
@@ -28,7 +31,9 @@ exports.createListing = async (req, res) => {
             photos,
             phoneNumber,
             quantity,
-            unit
+            quantity,
+            unit,
+            status: 'approved' // Auto-approve for immediate visibility
         });
 
 
@@ -106,6 +111,9 @@ exports.updateListing = async (req, res) => {
         }
         if (req.user.role === 'farmer' && !['Fish', 'Spawn/Seed'].includes(category)) {
             return res.status(403).json({ msg: 'Farmers can only post Fish or Spawn/Seed' });
+        }
+        if (req.user.role === 'hatchery' && category !== 'Spawn/Seed') {
+            return res.status(403).json({ msg: 'Hatcheries can only post Spawn/Seed' });
         }
         
         let updateFields = {
