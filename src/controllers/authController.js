@@ -4,12 +4,12 @@ const { OAuth2Client } = require('google-auth-library');
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 exports.register = async (req, res) => {
-    const { name, phone, password, district, role } = req.body;
+    const { name, phone, email, password, district, role } = req.body;
     try {
         let user = await User.findOne({ phone });
         if (user) return res.status(400).json({ msg: 'User already exists' });
 
-        user = new User({ name, phone, password, district, role });
+        user = new User({ name, phone, email, password, district, role });
         await user.save();
 
         const token = jwt.sign(
