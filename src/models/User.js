@@ -20,6 +20,8 @@ const userSchema = new mongoose.Schema({
         default: 'pending' 
     },
     profilePicture: { type: String, default: "" },
+    resetPasswordToken: { type: String },
+    resetPasswordExpires: { type: Date },
     createdAt: { type: Date, default: Date.now }
 });
 
