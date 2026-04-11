@@ -4,6 +4,7 @@ const Listing = require('../models/Listing');
 const { auth, admin } = require('../middlewares/auth');
 const listingController = require('../controllers/listingController');
 const { upload } = require('../config/cloudinary');
+const { cache } = require('../middlewares/cache');
 
 // @route   POST api/listings
 // @desc    Create a listing
@@ -19,7 +20,7 @@ router.post('/', auth, (req, res, next) => {
 
 // @route   GET api/listings
 // @desc    Get all approved listings
-router.get('/', listingController.getListings);
+router.get('/', cache(3600), listingController.getListings);
 
 // @route   PUT api/listings/:id/status
 // @desc    Approve/Reject listing (Admin only)

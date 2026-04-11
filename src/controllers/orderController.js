@@ -1,5 +1,6 @@
 const Order = require('../models/Order');
 const Listing = require('../models/Listing');
+const { publishMessage } = require('../config/rabbitClient');
 
 exports.createOrder = async (req, res) => {
     try {
@@ -22,6 +23,24 @@ exports.createOrder = async (req, res) => {
         });
 
         await newOrder.save();
+
+        // Dispatch background job to process the order
+        await publishMessage('order_processing', {
+            action: 'CREATE_ORDER',
+            orderId: newOrder._id,
+            buyerId: newOrder.buyerId,
+            sellerId: newOrder.sellerId,
+            listingId: newOrder.listingId,
+            totalAmount: newOrder.totalAmount
+        });
+
+        // Optional: Dispatch a notification event
+        await publishMessage('notifications', {
+            type: 'NEW_ORDER',
+            recipientId: newOrder.sellerId,
+            message: `You have received a new order for listing ${listing.productName}`
+        });
+
         res.json(newOrder);
     } catch (err) {
         console.error('Error creating order:', err);
@@ -65,6 +84,20 @@ exports.updateOrderStatus = async (req, res) => {
         if (!order) {
             return res.status(404).json({ msg: 'Order not found or unauthorized' });
         }
+
+        // Dispatch background job for payment updates or status hooks
+        await publishMessage('order_processing', {
+            action: 'UPDATE_STATUS',
+            orderId: order._id,
+            status: order.status
+        });
+
+        // Dispatch notification directly to queue
+        await publishMessage('notifications', {
+            type: 'ORDER_UPDATE',
+            recipientId: order.buyerId,
+            message: `Your order status has been updated to ${order.status}`
+        });
 
         res.json(order);
     } catch (err) {

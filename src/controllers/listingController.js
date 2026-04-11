@@ -1,5 +1,6 @@
 const Listing = require('../models/Listing');
 const { uploadToCloudinary } = require('../config/cloudinary');
+const { clearCache } = require('../middlewares/cache');
 
 exports.createListing = async (req, res) => {
     try {
@@ -38,6 +39,7 @@ exports.createListing = async (req, res) => {
 
 
         await newListing.save();
+        clearCache('/api/listings');
         res.json(newListing);
     } catch (err) {
         console.error('Error creating listing:', err);
@@ -85,6 +87,7 @@ exports.updateListingStatus = async (req, res) => {
     try {
         const { status } = req.body;
         const listing = await Listing.findByIdAndUpdate(req.params.id, { status }, { new: true });
+        clearCache('/api/listings');
         res.json(listing);
     } catch (err) {
         res.status(500).send('Server error');
@@ -143,6 +146,7 @@ exports.updateListing = async (req, res) => {
             return res.status(404).json({ msg: 'Listing not found or unauthorized' });
         }
 
+        clearCache('/api/listings');
         res.json(listing);
     } catch (err) {
         console.error('Error updating listing:', err);
@@ -158,6 +162,7 @@ exports.deleteListing = async (req, res) => {
             return res.status(404).json({ msg: 'Listing not found or unauthorized' });
         }
 
+        clearCache('/api/listings');
         res.json({ msg: 'Listing removed' });
     } catch (err) {
         console.error('Error deleting listing:', err);

@@ -3,6 +3,7 @@ const router = express.Router();
 const BuyingPost = require('../models/BuyingPost');
 const { auth, admin } = require('../middlewares/auth');
 const { upload, uploadToCloudinary } = require('../config/cloudinary');
+const { cache, clearCache } = require('../middlewares/cache');
 
 // @route   POST api/posts
 // @desc    Create a buying post
@@ -38,6 +39,7 @@ router.post('/', auth, (req, res, next) => {
         });
 
         await newPost.save();
+        clearCache('/api/posts');
         res.json(newPost);
     } catch (err) {
         res.status(500).send('Server error');
@@ -87,6 +89,7 @@ router.put('/:id', auth, (req, res, next) => {
             { new: true }
         );
 
+        clearCache('/api/posts');
         res.json(post);
     } catch (err) {
         res.status(500).send('Server error');
@@ -101,6 +104,7 @@ router.delete('/:id', auth, async (req, res) => {
         if (!post) {
             return res.status(404).json({ msg: 'Post not found or unauthorized' });
         }
+        clearCache('/api/posts');
         res.json({ msg: 'Post removed' });
     } catch (err) {
         res.status(500).send('Server error');
@@ -109,7 +113,7 @@ router.delete('/:id', auth, async (req, res) => {
 
 // @route   GET api/posts
 // @desc    Get all approved posts
-router.get('/', async (req, res) => {
+router.get('/', cache(3600), async (req, res) => {
     try {
         const { category, district, search } = req.query;
         let query = { status: 'approved' };
@@ -140,6 +144,7 @@ router.put('/:id/status', auth, admin, async (req, res) => {
     try {
         const { status } = req.body;
         const post = await BuyingPost.findByIdAndUpdate(req.params.id, { status }, { new: true });
+        clearCache('/api/posts');
         res.json(post);
     } catch (err) {
         res.status(500).send('Server error');
