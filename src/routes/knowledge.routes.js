@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Knowledge = require('../models/Knowledge');
-const { auth, admin } = require('../middlewares/auth');
+const { auth, admin } = require('../middleware/auth.middleware');
 
 // @route   GET api/knowledge
 // @desc    Get all articles

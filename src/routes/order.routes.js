@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { auth } = require('../middlewares/auth');
-const orderController = require('../controllers/orderController');
+const { auth, isVerified } = require('../middleware/auth.middleware');
+const orderController = require('../controllers/order.controller');
 
 // @route   POST api/orders
-// @desc    Create an order (Trader only)
+// @desc    Create an order (Anyone can buy)
 router.post('/', auth, orderController.createOrder);
 
 // @route   GET api/orders/my-orders
@@ -15,8 +15,12 @@ router.get('/my-orders', auth, orderController.getMyOrders);
 // @desc    Get orders received by user (Seller)
 router.get('/incoming', auth, orderController.getIncomingOrders);
 
+// @route   GET api/orders/:id
+// @desc    Get single order details (Buyer or Seller only)
+router.get('/:id', auth, orderController.getOrderDetails);
+
 // @route   PATCH api/orders/:id/status
-// @desc    Update order status (Seller only)
-router.patch('/:id/status', auth, orderController.updateOrderStatus);
+// @desc    Update order status (Verified Seller only)
+router.patch('/:id/status', auth, isVerified, orderController.updateOrderStatus);
 
 module.exports = router;

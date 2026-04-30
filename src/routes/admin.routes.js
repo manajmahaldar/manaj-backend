@@ -4,7 +4,7 @@ const Report = require('../models/Report');
 const User = require('../models/User');
 const Listing = require('../models/Listing');
 const BuyingPost = require('../models/BuyingPost');
-const { auth, admin } = require('../middlewares/auth');
+const { auth, admin } = require('../middleware/auth.middleware');
 
 // @route   GET api/admin/stats
 // @desc    Get dashboard stats (Admin only)
@@ -52,8 +52,57 @@ router.post('/', auth, async (req, res) => {
 // @desc    Get all users (Admin only)
 router.get('/users', auth, admin, async (req, res) => {
     try {
-        const users = await User.find({ role: { $ne: 'admin' } }).select('-password');
+        const users = await User.find({ role: { $ne: 'admin' } }).select('-password').lean();
         res.json(users);
+    } catch (err) {
+        res.status(500).send('Server error');
+    }
+});
+
+// @route   GET api/admin/pending-users
+// @desc    Get all users pending verification
+router.get('/pending-users', auth, admin, async (req, res) => {
+    try {
+        const users = await User.find({ 
+            accountStatus: 'pending',
+            aadhaarCard: { $ne: "" } 
+        }).select('-password').lean();
+        res.json(users);
+    } catch (err) {
+        res.status(500).send('Server error');
+    }
+});
+
+// @route   PUT api/admin/users/:id/approve-verification
+// @desc    Approve user verification
+router.put('/users/:id/approve-verification', auth, admin, async (req, res) => {
+    try {
+        const user = await User.findByIdAndUpdate(
+            req.params.id, 
+            { accountStatus: 'active', verifiedStatus: true }, 
+            { new: true }
+        );
+        res.json(user);
+    } catch (err) {
+        res.status(500).send('Server error');
+    }
+});
+
+// @route   PUT api/admin/users/:id/reject-verification
+// @desc    Reject user verification
+router.put('/users/:id/reject-verification', auth, admin, async (req, res) => {
+    try {
+        const { reason } = req.body;
+        const user = await User.findByIdAndUpdate(
+            req.params.id, 
+            { 
+                accountStatus: 'pending', 
+                verifiedStatus: false,
+                verificationRejectedReason: reason || "Documents not clear"
+            }, 
+            { new: true }
+        );
+        res.json(user);
     } catch (err) {
         res.status(500).send('Server error');
     }
@@ -86,7 +135,7 @@ router.put('/users/:id/status', auth, admin, async (req, res) => {
 // @desc    Get all pending listings (Admin only)
 router.get('/pending-listings', auth, admin, async (req, res) => {
     try {
-        const listings = await Listing.find({ status: 'pending' }).sort({ createdAt: -1 });
+        const listings = await Listing.find({ status: 'pending' }).sort({ createdAt: -1 }).lean();
         res.json(listings);
     } catch (err) {
         res.status(500).send('Server error');

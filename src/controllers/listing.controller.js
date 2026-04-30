@@ -1,6 +1,7 @@
 const Listing = require('../models/Listing');
+const User = require('../models/User'); // Added User import for role-based filtering
 const { uploadToCloudinary } = require('../config/cloudinary');
-const { clearCache } = require('../middlewares/cache');
+const { clearCache } = require('../middleware/cache');
 
 exports.createListing = async (req, res) => {
     try {
@@ -15,11 +16,15 @@ exports.createListing = async (req, res) => {
         if (req.user.role === 'seller' && !['Feed', 'Medicine'].includes(category)) {
             return res.status(403).json({ msg: 'Sellers can only post Feed or Medicine' });
         }
-        if (req.user.role === 'farmer' && !['Fish', 'Spawn/Seed'].includes(category)) {
-            return res.status(403).json({ msg: 'Farmers can only post Fish or Spawn/Seed' });
+        if (req.user.role === 'farmer' && category !== 'Fingerling') {
+            return res.status(403).json({ msg: 'Farmers can only post Chara Pona (Fingerling)' });
         }
-        if (req.user.role === 'hatchery' && category !== 'Spawn/Seed') {
-            return res.status(403).json({ msg: 'Hatcheries can only post Spawn/Seed' });
+        if (req.user.role === 'hatchery' && !['Spawn', 'Fingerling'].includes(category)) {
+            return res.status(403).json({ msg: 'Hatcheries can only post Spawn (Renu) or Fingerling (Chara)' });
+        }
+        // Main Admin sells just Big Fish
+        if (req.user.role === 'admin' && category !== 'Fish') {
+            return res.status(403).json({ msg: 'Main Admin can only sell Big Fish' });
         }
 
         const newListing = new Listing({
@@ -31,7 +36,6 @@ exports.createListing = async (req, res) => {
             description,
             photos,
             phoneNumber,
-            quantity,
             quantity,
             unit,
             status: 'approved' // Auto-approve for immediate visibility
@@ -49,7 +53,7 @@ exports.createListing = async (req, res) => {
 
 exports.getListings = async (req, res) => {
     try {
-        const { category, district, search, minPrice, maxPrice } = req.query;
+        const { category, district, search, minPrice, maxPrice, sellerRole, page = 1, limit = 12 } = req.query;
         let query = { status: 'approved' };
         
         if (category) {
@@ -58,27 +62,40 @@ exports.getListings = async (req, res) => {
         if (district) {
             query.district = district;
         }
+        if (sellerRole) {
+            const usersWithRole = await User.find({ role: sellerRole }).select('_id').lean();
+            const userIds = usersWithRole.map(u => u._id);
+            query.sellerId = { $in: userIds };
+        }
         if (search) {
             query.$or = [
                 { productName: { $regex: search, $options: 'i' } },
                 { district: { $regex: search, $options: 'i' } }
             ];
         }
-        if (minPrice || maxPrice) {
-            query.price = {};
-            // Assuming price is stored as String, wait... but numeric comparison needs Number
-            // Listing.js stores price as: price: { type: String, required: true }
-            // So we can't reliably do $gte/$lte directly on the string in MongoDB without aggregation.
-            // Let's rely on frontend for price, or simply return all and let frontend filter price.
-            // Since district and search can greatly reduce the payload, it's fine if frontend filters price.
-        }
 
-        const listings = await Listing.find(query).sort({ createdAt: -1 });
-        
-        // Let's parse string prices and filter here if needed, or rely on frontend filtering.
-        // The current implementation relies on frontend filtering for prices so we just return the fetched listings.
-        res.json(listings);
+        const skip = (page - 1) * limit;
+
+        const [listings, total] = await Promise.all([
+            Listing.find(query)
+                .populate('sellerId', 'name district verifiedStatus role profilePicture')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(parseInt(limit))
+                .lean(), // Performance: Reduce overhead by returning plain JS objects
+            Listing.countDocuments(query)
+        ]);
+
+        res.json({
+            listings,
+            pagination: {
+                total,
+                page: parseInt(page),
+                pages: Math.ceil(total / limit)
+            }
+        });
     } catch (err) {
+        console.error('Error in getListings:', err);
         res.status(500).send('Server error');
     }
 };
@@ -112,11 +129,14 @@ exports.updateListing = async (req, res) => {
         if (req.user.role === 'seller' && !['Feed', 'Medicine'].includes(category)) {
             return res.status(403).json({ msg: 'Sellers can only post Feed or Medicine' });
         }
-        if (req.user.role === 'farmer' && !['Fish', 'Spawn/Seed'].includes(category)) {
-            return res.status(403).json({ msg: 'Farmers can only post Fish or Spawn/Seed' });
+        if (req.user.role === 'farmer' && category !== 'Fingerling') {
+            return res.status(403).json({ msg: 'Farmers can only post Chara Pona (Fingerling)' });
         }
-        if (req.user.role === 'hatchery' && category !== 'Spawn/Seed') {
-            return res.status(403).json({ msg: 'Hatcheries can only post Spawn/Seed' });
+        if (req.user.role === 'hatchery' && !['Spawn', 'Fingerling'].includes(category)) {
+            return res.status(403).json({ msg: 'Hatcheries can only post Spawn (Renu) or Fingerling (Chara)' });
+        }
+        if (req.user.role === 'admin' && category !== 'Fish') {
+            return res.status(403).json({ msg: 'Main Admin can only sell Big Fish' });
         }
         
         let updateFields = {

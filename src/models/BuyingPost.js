@@ -22,4 +22,10 @@ const buyingPostSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
+// Indexes for scalability
+buyingPostSchema.index({ district: 1, category: 1, status: 1 });
+buyingPostSchema.index({ traderId: 1 });
+buyingPostSchema.index({ createdAt: -1 });
+buyingPostSchema.index({ status: 1 });
+
 module.exports = mongoose.model('BuyingPost', buyingPostSchema);

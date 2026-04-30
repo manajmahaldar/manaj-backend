@@ -1,14 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const Listing = require('../models/Listing');
-const { auth, admin } = require('../middlewares/auth');
-const listingController = require('../controllers/listingController');
+const { auth, admin, isVerified } = require('../middleware/auth.middleware');
+const listingController = require('../controllers/listing.controller');
 const { upload } = require('../config/cloudinary');
-const { cache } = require('../middlewares/cache');
+const { cache } = require('../middleware/cache');
 
 // @route   POST api/listings
 // @desc    Create a listing
-router.post('/', auth, (req, res, next) => {
+router.post('/', auth, isVerified, (req, res, next) => {
     upload.array('photos', 3)(req, res, (err) => {
         if (err) {
             console.error('Multer/Cloudinary Error:', err);
@@ -32,7 +32,7 @@ router.get('/my-listings', auth, listingController.getMyListings);
 
 // @route   PUT api/listings/:id
 // @desc    Update a listing
-router.put('/:id', auth, (req, res, next) => {
+router.put('/:id', auth, isVerified, (req, res, next) => {
     upload.array('photos', 3)(req, res, (err) => {
         if (err) {
             console.error('Multer/Cloudinary Error:', err);
