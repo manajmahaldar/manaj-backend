@@ -70,7 +70,7 @@ app.use(helmet({
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(',') 
-  : ['http://localhost:5173', 'https://monaj-frontend.vercel.app', 'https://manaj-backend.onrender.com'];
+  : ['http://localhost:5173', 'https://monaj-frontend.vercel.app', 'https://manaj-backend.onrender.com', 'https://www.matsyalink.com'];
 
 app.use(cors({
   origin: (origin, callback) => {
