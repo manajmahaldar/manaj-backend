@@ -164,4 +164,26 @@ router.put('/listings/:id/reject', auth, admin, async (req, res) => {
     }
 });
 
+// @route   DELETE api/admin/users/:id
+// @desc    Delete a user (Admin only)
+router.delete('/users/:id', auth, admin, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        
+        // 1. Delete user's listings
+        await Listing.deleteMany({ sellerId: userId });
+        
+        // 2. Delete user's buying posts
+        await BuyingPost.deleteMany({ traderId: userId });
+        
+        // 3. Delete the user
+        await User.findByIdAndDelete(userId);
+        
+        res.json({ msg: 'User and all related data removed successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server error');
+    }
+});
+
 module.exports = router;

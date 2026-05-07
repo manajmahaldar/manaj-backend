@@ -77,8 +77,8 @@ exports.register = async (req, res) => {
     if (email && !validator.isEmail(email)) {
         return res.status(400).json({ msg: 'Invalid email address.' });
     }
-    if (phone && !/^(?:\+?88)?01[3-9]\d{8}$/.test(phone)) {
-        return res.status(400).json({ msg: 'Invalid Bangladeshi phone number.' });
+    if (phone && !/^(?:\+?91|0)?[6-9]\d{9}$/.test(phone)) {
+        return res.status(400).json({ msg: 'Invalid Indian phone number.' });
     }
     if (!isStrongPassword(password)) {
         return res.status(400).json({
@@ -195,7 +195,10 @@ exports.login = async (req, res) => {
         if (user.refreshTokens.length > MAX_REFRESH_TOKENS_PER_USER) {
             user.refreshTokens = user.refreshTokens.slice(-MAX_REFRESH_TOKENS_PER_USER);
         }
-        await user.save();
+        await User.updateOne(
+            { _id: user._id },
+            { $set: { refreshTokens: user.refreshTokens, lastLogin: new Date() } }
+        );
 
         setCookieOptions(res, raw);
         return res.json({
@@ -249,7 +252,10 @@ exports.refreshToken = async (req, res) => {
         if (user.refreshTokens.length > MAX_REFRESH_TOKENS_PER_USER) {
             user.refreshTokens = user.refreshTokens.slice(-MAX_REFRESH_TOKENS_PER_USER);
         }
-        await user.save();
+        await User.updateOne(
+            { _id: user._id },
+            { $set: { refreshTokens: user.refreshTokens } }
+        );
 
         await AuditLog.record({ userId: user._id, action: 'token_refresh', req });
 
