@@ -29,7 +29,7 @@ const uploadToCloudinary = (buffer, options = {}) => {
     return new Promise((resolve, reject) => {
         const uploadOptions = {
             folder: 'fish_marketplace/listings',
-            transformation: [{ width: 800, height: 800, crop: 'limit' }],
+            resource_type: 'auto',
             ...options
         };
         const stream = cloudinary.uploader.upload_stream(uploadOptions, (error, result) => {

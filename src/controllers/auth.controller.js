@@ -63,46 +63,89 @@ const isStrongPassword = (pw) =>
         minSymbols:       1,
     });
 
+/**
+ * Standardize Indian phone numbers to 10 digits by removing
+ * prefixes (+91, 91, or 0).
+ */
+const normalizePhone = (phone) => {
+    if (!phone) return phone;
+    // Remove all non-numeric characters first
+    const digits = phone.replace(/\D/g, '');
+    // If it's 12 digits and starts with 91, take last 10
+    if (digits.length === 12 && digits.startsWith('91')) {
+        return digits.slice(2);
+    }
+    // If it's 11 digits and starts with 0, take last 10
+    if (digits.length === 11 && digits.startsWith('0')) {
+        return digits.slice(1);
+    }
+    // If it's 10 digits, return as is
+    if (digits.length === 10) {
+        return digits;
+    }
+    return phone; // fallback to original if it doesn't match expected patterns
+};
+
 // ── Register ──────────────────────────────────────────────────────────────────
 exports.register = async (req, res) => {
     const { name, phone, email, password, district, role } = req.body;
 
     // — Input validation —
     if (!name || !password || !district) {
+        console.warn('Registration failed: Missing required fields (name, password, or district)');
         return res.status(400).json({ msg: 'Name, password, and district are required.' });
     }
     if (!phone && !email) {
+        console.warn('Registration failed: Neither phone nor email provided');
         return res.status(400).json({ msg: 'Phone or email is required.' });
     }
     if (email && !validator.isEmail(email)) {
+        console.warn(`Registration failed: Invalid email format (${email})`);
         return res.status(400).json({ msg: 'Invalid email address.' });
     }
     if (phone && !/^(?:\+?91|0)?[6-9]\d{9}$/.test(phone)) {
+        console.warn(`Registration failed: Invalid phone format (${phone})`);
         return res.status(400).json({ msg: 'Invalid Indian phone number.' });
     }
     if (!isStrongPassword(password)) {
+        console.warn('Registration failed: Password strength requirements not met');
         return res.status(400).json({
             msg: 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.'
         });
     }
     const allowedRoles = ['farmer', 'seller', 'trader', 'hatchery'];
     if (role && !allowedRoles.includes(role)) {
+        console.warn(`Registration failed: Invalid role (${role})`);
         return res.status(400).json({ msg: 'Invalid role.' });
     }
 
     try {
-        // Generic duplicate check — don't reveal which field conflicts
-        const exists = await User.findOne({
-            $or: [
-                ...(phone ? [{ phone }] : []),
-                ...(email ? [{ email }] : [])
-            ]
-        });
-        if (exists) {
-            return res.status(400).json({ msg: 'An account with these credentials already exists.' });
+        const normalizedPhone = phone ? normalizePhone(phone) : undefined;
+        const normalizedEmail = email ? email.toLowerCase().trim() : undefined;
+
+        // — Duplicate Check —
+        if (normalizedEmail) {
+            const emailExists = await User.findOne({ email: normalizedEmail });
+            if (emailExists) {
+                return res.status(400).json({ msg: 'An account with this email already exists.' });
+            }
         }
 
-        const user = new User({ name, phone, email, password, district, role: role || 'farmer' });
+        if (normalizedPhone) {
+            const phoneExists = await User.findOne({ phone: normalizedPhone });
+            if (phoneExists) {
+                return res.status(400).json({ msg: 'An account with this phone number already exists.' });
+            }
+        }
+
+        const user = new User({
+            name,
+            phone:    normalizedPhone,
+            email:    normalizedEmail,
+            password,
+            district,
+            role: role || 'farmer'
+        });
         await user.save();
 
         // Issue tokens
@@ -128,6 +171,15 @@ exports.register = async (req, res) => {
             }
         });
     } catch (err) {
+        // Handle MongoDB duplicate key error (code 11000)
+        if (err.code === 11000) {
+            const field = Object.keys(err.keyPattern)[0];
+            const msg = field === 'email' ? 'Email already in use.' :
+                        field === 'phone' ? 'Phone number already in use.' :
+                        'An account with these credentials already exists.';
+            return res.status(400).json({ msg });
+        }
+
         console.error('Registration error:', err);
         return res.status(500).json({ msg: 'Server error' });
     }
@@ -135,16 +187,17 @@ exports.register = async (req, res) => {
 
 // ── Login ─────────────────────────────────────────────────────────────────────
 exports.login = async (req, res) => {
-    const { phone, email, password } = req.body;
+    const { email, password } = req.body;
 
-    if (!password || (!phone && !email)) {
-        return res.status(400).json({ msg: 'Credentials are required.' });
+    if (!email || !password) {
+        return res.status(400).json({ msg: 'Email and password are required.' });
     }
 
     try {
+        const normalizedEmail = email.toLowerCase().trim();
+
         // Fetch user with password (select:false by default)
-        const query = email ? { email } : { phone };
-        const user  = await User.findOne(query).select(
+        const user  = await User.findOne({ email: normalizedEmail }).select(
             '+password +failedLoginAttempts +lockUntil +refreshTokens +passwordChangedAt'
         );
 
@@ -152,16 +205,15 @@ exports.login = async (req, res) => {
         const dummy = '$2a$12$dummyhashtopreventtimingattacksXXXXXXXXXXXXXXXX';
         if (!user) {
             await require('bcryptjs').compare(password, dummy).catch(() => {});
-            await AuditLog.record({ action: 'login_fail', req, meta: { reason: 'user_not_found', query } });
-            return res.status(400).json({ msg: 'Invalid credentials.' });
+            await AuditLog.record({ action: 'login_fail', req, meta: { reason: 'user_not_found', email: normalizedEmail } });
+            return res.status(401).json({ msg: 'Invalid credentials.' });
         }
 
         // Account lockout check
         if (user.isLocked) {
-            const remaining = Math.ceil((user.lockUntil - Date.now()) / 1000 / 60);
             await AuditLog.record({ userId: user._id, action: 'login_locked', req });
             return res.status(423).json({
-                msg: `Account temporarily locked due to too many failed attempts. Try again in ${remaining} minute(s).`
+                msg: `Account temporarily locked due to too many failed attempts. Please try again in a moment.`
             });
         }
 
@@ -175,12 +227,12 @@ exports.login = async (req, res) => {
             await user.incFailedAttempts();
             await AuditLog.record({ userId: user._id, action: 'login_fail', req, meta: { reason: 'wrong_password' } });
 
-            const attemptsLeft = Math.max(0, 5 - (user.failedLoginAttempts + 1));
+            const attemptsLeft = Math.max(0, 1000 - (user.failedLoginAttempts + 1));
             const msg = attemptsLeft > 0
                 ? `Invalid credentials. ${attemptsLeft} attempt(s) remaining before lockout.`
-                : 'Invalid credentials. Account is now locked for 15 minutes.';
+                : 'Invalid credentials. Account is temporarily locked.';
 
-            return res.status(400).json({ msg });
+            return res.status(401).json({ msg });
         }
 
         // — Success —
@@ -303,12 +355,13 @@ exports.googleLogin = async (req, res) => {
             audience: process.env.GOOGLE_CLIENT_ID
         });
         const { sub: googleId, email, name, picture } = ticket.getPayload();
+        const normalizedEmail = email ? email.toLowerCase().trim() : undefined;
 
-        let user = await User.findOne({ $or: [{ googleId }, { email }] }).select('+refreshTokens');
+        let user = await User.findOne({ $or: [{ googleId }, { email: normalizedEmail }] }).select('+refreshTokens');
 
         if (isRegistration) {
             if (user) {
-                return res.status(400).json({ msg: 'Account already exists. Please log in.' });
+                return res.status(401).json({ msg: 'Account already exists. Please log in.' });
             }
             user = new User({
                 googleId,
@@ -323,7 +376,7 @@ exports.googleLogin = async (req, res) => {
             await AuditLog.record({ userId: user._id, action: 'register', req, meta: { provider: 'google' } });
         } else {
             if (!user) {
-                return res.status(400).json({ msg: 'Account not found. Please register first.' });
+                return res.status(401).json({ msg: 'Account not found. Please register first.' });
             }
             if (!user.googleId) {
                 user.googleId = googleId;
@@ -362,8 +415,8 @@ exports.googleLogin = async (req, res) => {
             }
         });
     } catch (err) {
-        console.error('Google login error:', err);
-        return res.status(500).json({ msg: 'Google login failed' });
+        console.error('Google login error:', err.message);
+        return res.status(401).json({ msg: 'Google authentication failed. Invalid token.' });
     }
 };
 

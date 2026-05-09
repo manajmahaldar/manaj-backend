@@ -27,22 +27,22 @@ const collectDefaultMetrics = client.collectDefaultMetrics;
 collectDefaultMetrics({ prefix: 'monaj_core_' });
 
 // --- Rate Limiters ---
-// General API limiter: 200 requests per 15 minutes per IP
+// General API limiter: Increased for dev/testing
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 200,
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { msg: 'Too many requests from this IP, please try again after 15 minutes.' },
+  message: { msg: 'Too many requests. Please try again in a minute.' },
 });
 
-// Strict limiter for auth routes: 20 requests per 15 minutes per IP
+// Strict limiter for auth routes: Increased for dev/testing
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 500,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { msg: 'Too many login/register attempts. Please try again after 15 minutes.' },
+  message: { msg: 'Too many login/register attempts. Please try again in a minute.' },
 });
 
 // --- Security Middleware ---
@@ -54,7 +54,8 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "https://accounts.google.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "https://res.cloudinary.com", "https://lh3.googleusercontent.com"],
-      connectSrc: ["'self'", "https://monaj-frontend.vercel.app", "https://manaj-backend.onrender.com"],
+      connectSrc: ["'self'", "https://monaj-frontend.vercel.app", "https://manaj-backend.onrender.com", "https://accounts.google.com"],
+      frameSrc: ["'self'", "https://accounts.google.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],
       upgradeInsecureRequests: [],

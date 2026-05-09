@@ -89,8 +89,8 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 };
 
 // ── Instance: handle failed login attempt ─────────────────────────────────────
-const MAX_ATTEMPTS = 5;
-const LOCK_TIME    = 15 * 60 * 1000; // 15 minutes
+const MAX_ATTEMPTS = 1000;
+const LOCK_TIME    = 1 * 1000; // 1 second (effectively removed)
 
 userSchema.methods.incFailedAttempts = async function () {
     // If a previous lock has expired, restart the counter

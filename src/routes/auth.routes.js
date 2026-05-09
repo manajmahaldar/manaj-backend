@@ -6,28 +6,28 @@ const { auth }   = require('../middleware/auth.middleware');
 
 // ── Rate limiters ─────────────────────────────────────────────────────────────
 
-// Strict: 5 attempts per 15 min per IP for login / register
+// Increased: 100 attempts per 1 min per IP for login / register
 const strictAuthLimiter = rateLimit({
-    windowMs:       15 * 60 * 1000,
-    max:            5,
+    windowMs:       1 * 60 * 1000,
+    max:            100,
     standardHeaders: true,
     legacyHeaders:  false,
-    message: { msg: 'Too many attempts from this IP. Please try again in 15 minutes.' }
+    message: { msg: 'Too many attempts. Please try again in 1 minute.' }
 });
 
-// Moderate: 10 per 15 min for password-related flows
+// Increased: 50 per 1 min for password-related flows
 const passwordLimiter = rateLimit({
-    windowMs:       15 * 60 * 1000,
-    max:            10,
+    windowMs:       1 * 60 * 1000,
+    max:            50,
     standardHeaders: true,
     legacyHeaders:  false,
     message: { msg: 'Too many password reset requests. Please try again later.' }
 });
 
-// Refresh token: 60 per 15 min (silent background calls)
+// Increased: 500 per 1 min for refresh token
 const refreshLimiter = rateLimit({
-    windowMs:       15 * 60 * 1000,
-    max:            60,
+    windowMs:       1 * 60 * 1000,
+    max:            500,
     standardHeaders: true,
     legacyHeaders:  false,
     message: { msg: 'Too many token refresh requests.' }

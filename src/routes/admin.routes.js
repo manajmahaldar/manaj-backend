@@ -132,21 +132,32 @@ router.put('/users/:id/status', auth, admin, async (req, res) => {
 });
 
 // @route   GET api/admin/pending-listings
-// @desc    Get all pending listings (Admin only)
+// @desc    Get all pending listings and buying posts (Admin only)
 router.get('/pending-listings', auth, admin, async (req, res) => {
     try {
         const listings = await Listing.find({ status: 'pending' }).sort({ createdAt: -1 }).lean();
-        res.json(listings);
+        const posts = await BuyingPost.find({ status: 'pending' }).sort({ createdAt: -1 }).lean();
+        
+        // Combine and add type indicator for frontend
+        const combined = [
+            ...listings.map(l => ({ ...l, type: 'listing' })),
+            ...posts.map(p => ({ ...p, type: 'post' }))
+        ].sort((a, b) => b.createdAt - a.createdAt);
+
+        res.json(combined);
     } catch (err) {
         res.status(500).send('Server error');
     }
 });
+
+const { clearCache } = require('../middleware/cache');
 
 // @route   PUT api/admin/listings/:id/approve
 // @desc    Approve a listing (Admin only)
 router.put('/listings/:id/approve', auth, admin, async (req, res) => {
     try {
         const listing = await Listing.findByIdAndUpdate(req.params.id, { status: 'approved' }, { new: true });
+        clearCache('/api/listings');
         res.json(listing);
     } catch (err) {
         res.status(500).send('Server error');
@@ -158,7 +169,32 @@ router.put('/listings/:id/approve', auth, admin, async (req, res) => {
 router.put('/listings/:id/reject', auth, admin, async (req, res) => {
     try {
         const listing = await Listing.findByIdAndUpdate(req.params.id, { status: 'rejected' }, { new: true });
+        clearCache('/api/listings');
         res.json(listing);
+    } catch (err) {
+        res.status(500).send('Server error');
+    }
+});
+
+// @route   PUT api/admin/posts/:id/approve
+// @desc    Approve a buying post (Admin only)
+router.put('/posts/:id/approve', auth, admin, async (req, res) => {
+    try {
+        const post = await BuyingPost.findByIdAndUpdate(req.params.id, { status: 'approved' }, { new: true });
+        clearCache('/api/posts');
+        res.json(post);
+    } catch (err) {
+        res.status(500).send('Server error');
+    }
+});
+
+// @route   PUT api/admin/posts/:id/reject
+// @desc    Reject a buying post (Admin only)
+router.put('/posts/:id/reject', auth, admin, async (req, res) => {
+    try {
+        const post = await BuyingPost.findByIdAndUpdate(req.params.id, { status: 'rejected' }, { new: true });
+        clearCache('/api/posts');
+        res.json(post);
     } catch (err) {
         res.status(500).send('Server error');
     }

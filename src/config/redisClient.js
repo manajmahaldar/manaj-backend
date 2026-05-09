@@ -1,62 +1,68 @@
 const redis = require('redis');
 
-// Create Redis Client
-const client = redis.createClient({
+const useRedis = process.env.USE_REDIS === 'true';
+
+// Create Redis Client (only if enabled)
+const client = useRedis ? redis.createClient({
     url: process.env.REDIS_URL || 'redis://localhost:6379',
     socket: {
         reconnectStrategy: (retries) => {
-            if (retries > 10) {
-                console.log('Redis: Max retries reached. Stopping reconnection attempts.');
-                return new Error('Max retries reached');
+            if (retries > 5) {
+                console.log('Redis: Reconnection paused to avoid logs noise. Caching disabled.');
+                return false; // Stop reconnecting after 5 attempts
             }
-            return Math.min(retries * 100, 3000); // Backoff strategy
+            return Math.min(retries * 500, 5000); 
         }
     }
-});
+}) : null;
 
 // Flag to track connection status
 let isConnected = false;
 
-client.on('connect', () => {
-    isConnected = true;
-    console.log('✅ Redis client connected');
-});
+if (client) {
+    client.on('connect', () => {
+        isConnected = true;
+        console.log('✅ Redis client connected');
+    });
 
-client.on('error', (err) => {
-    isConnected = false;
-    // Log error but don't crash
-    if (err.code === 'ECONNREFUSED') {
-        console.error('❌ Redis Connection Refused. Ensure Redis is running via Docker.');
-    } else {
-        console.error('Redis Client Error', err);
-    }
-});
-
-client.on('ready', () => {
-    isConnected = true;
-    console.log('✅ Redis client ready');
-});
-
-client.on('end', () => {
-    isConnected = false;
-    console.log('Redis client disconnected');
-});
-
-// Connect to Redis
-const connectToRedis = async () => {
-    try {
-        if (!client.isOpen) {
-            await client.connect();
+    client.on('error', (err) => {
+        isConnected = false;
+        // Reduce noise for common connection issues
+        if (err.code === 'ENOTFOUND' || err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
+            // Silently handle these, just log once or briefly
+            return; 
         }
-    } catch (err) {
-        console.error('Failed to connect to Redis initially:', err.message);
-    }
-};
+        console.error('Redis Client Error', err.message);
+    });
 
-connectToRedis();
+    client.on('ready', () => {
+        isConnected = true;
+        console.log('✅ Redis client ready');
+    });
+
+    client.on('end', () => {
+        isConnected = false;
+        console.log('Redis client disconnected');
+    });
+
+    // Connect to Redis
+    const connectToRedis = async () => {
+        try {
+            if (!client.isOpen) {
+                await client.connect();
+            }
+        } catch (err) {
+            // Noisy logs are avoided here
+        }
+    };
+
+    connectToRedis();
+} else {
+    console.log('ℹ️ Redis is disabled via USE_REDIS flag');
+}
 
 module.exports = {
     client,
-    isConnected: () => isConnected
+    isConnected: () => isConnected && useRedis
 };
 

@@ -5,12 +5,22 @@ const { clearCache } = require('../middleware/cache');
 
 exports.createListing = async (req, res) => {
     try {
-        const { productName, category, price, district, description, phoneNumber, quantity, unit } = req.body;
+        const { productName, category, price, district, localDistrict, description, phoneNumber, quantity, unit } = req.body;
         
-        // Upload each file buffer to Cloudinary, then collect URLs
-        const photos = req.files && req.files.length > 0
-            ? await Promise.all(req.files.map(file => uploadToCloudinary(file.buffer).then(r => r.secure_url)))
-            : [];
+        // Upload files to Cloudinary, separating photos and video
+        const photos = [];
+        let video = '';
+        if (req.files && req.files.length > 0) {
+            for (const file of req.files) {
+                const isVideo = file.mimetype.startsWith('video/');
+                const url = await uploadToCloudinary(file.buffer, { resource_type: isVideo ? 'video' : 'image' }).then(r => r.secure_url);
+                if (isVideo) {
+                    video = url;
+                } else {
+                    photos.push(url);
+                }
+            }
+        }
 
         // Role-based category validation
         if (req.user.role === 'seller' && !['Feed', 'Medicine'].includes(category)) {
@@ -33,12 +43,14 @@ exports.createListing = async (req, res) => {
             category,
             price,
             district,
+            localDistrict,
             description,
             photos,
+            video,
             phoneNumber,
             quantity,
             unit,
-            status: 'approved' // Auto-approve for immediate visibility
+            status: req.user.role === 'admin' ? 'approved' : 'pending' // Admin listings are auto-approved, others need review
         });
 
 
@@ -123,7 +135,7 @@ exports.getMyListings = async (req, res) => {
 
 exports.updateListing = async (req, res) => {
     try {
-        const { productName, category, price, district, description, phoneNumber, quantity, unit } = req.body;
+        const { productName, category, price, district, localDistrict, description, phoneNumber, quantity, unit } = req.body;
         
         // Role-based category validation
         if (req.user.role === 'seller' && !['Feed', 'Medicine'].includes(category)) {
@@ -144,6 +156,7 @@ exports.updateListing = async (req, res) => {
             category,
             price,
             district,
+            localDistrict,
             description,
             phoneNumber,
             quantity,
@@ -151,9 +164,19 @@ exports.updateListing = async (req, res) => {
         };
 
         if (req.files && req.files.length > 0) {
-            updateFields.photos = await Promise.all(
-                req.files.map(file => uploadToCloudinary(file.buffer).then(r => r.secure_url))
-            );
+            const photos = [];
+            let video = '';
+            for (const file of req.files) {
+                const isVideo = file.mimetype.startsWith('video/');
+                const url = await uploadToCloudinary(file.buffer, { resource_type: isVideo ? 'video' : 'image' }).then(r => r.secure_url);
+                if (isVideo) {
+                    video = url;
+                } else {
+                    photos.push(url);
+                }
+            }
+            if (photos.length > 0) updateFields.photos = photos;
+            if (video) updateFields.video = video;
         }
 
         const listing = await Listing.findOneAndUpdate(

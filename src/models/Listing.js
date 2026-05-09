@@ -15,8 +15,10 @@ const listingSchema = new mongoose.Schema({
     price: { type: String, required: true },
     lastPriceUpdate: { type: Date, default: Date.now },
     district: { type: String, required: true },
+    localDistrict: { type: String, default: '' },
     description: { type: String, required: true },
     photos: [{ type: String }], // Cloudinary URLs
+    video: { type: String, default: '' }, // Cloudinary URL for 10s video
     phoneNumber: { type: String, required: true },
     status: { 
         type: String, 
