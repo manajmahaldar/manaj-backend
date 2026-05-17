@@ -8,7 +8,9 @@ const AuditLog  = require('../models/AuditLog');
 const logger    = require('../utils/logger');
 const sendEmail = require('../utils/sendEmail');
 
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '613301631751-4m4t7be6u5cc37j651lco62j2p57564n.apps.googleusercontent.com';
+const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
+
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const ACCESS_TOKEN_EXPIRY  = '15m';
@@ -356,7 +358,7 @@ exports.googleLogin = async (req, res) => {
     try {
         const ticket = await googleClient.verifyIdToken({
             idToken:  token,
-            audience: process.env.GOOGLE_CLIENT_ID
+            audience: GOOGLE_CLIENT_ID
         });
         const { sub: googleId, email, name, picture } = ticket.getPayload();
         const normalizedEmail = email ? email.toLowerCase().trim() : undefined;
