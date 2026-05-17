@@ -5,6 +5,7 @@ const { OAuth2Client } = require('google-auth-library');
 
 const User      = require('../models/User');
 const AuditLog  = require('../models/AuditLog');
+const logger    = require('../utils/logger');
 const sendEmail = require('../utils/sendEmail');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -206,6 +207,7 @@ exports.login = async (req, res) => {
         if (!user) {
             await require('bcryptjs').compare(password, dummy).catch(() => {});
             await AuditLog.record({ action: 'login_fail', req, meta: { reason: 'user_not_found', email: normalizedEmail } });
+            logger.warn(`Login failed: User not found`, { email: normalizedEmail, ip: req.ip });
             return res.status(401).json({ msg: 'Invalid credentials.' });
         }
 
@@ -226,6 +228,7 @@ exports.login = async (req, res) => {
         if (!isMatch) {
             await user.incFailedAttempts();
             await AuditLog.record({ userId: user._id, action: 'login_fail', req, meta: { reason: 'wrong_password' } });
+            logger.warn(`Login failed: Incorrect password`, { userId: user._id, email: user.email, ip: req.ip });
 
             const attemptsLeft = Math.max(0, 1000 - (user.failedLoginAttempts + 1));
             const msg = attemptsLeft > 0
@@ -238,6 +241,7 @@ exports.login = async (req, res) => {
         // — Success —
         await user.resetFailedAttempts();
         await AuditLog.record({ userId: user._id, action: 'login_success', req });
+        logger.info(`Login successful`, { userId: user._id, email: user.email, ip: req.ip });
 
         const accessToken = signAccessToken(user);
         const { raw, hashed } = generateRefreshToken();

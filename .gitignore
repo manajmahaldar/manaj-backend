@@ -30,3 +30,8 @@ build/
 # Uploads and User Content
 uploads/
 public/uploads/
+
+
+temp/
+uploads/
+*.mp4

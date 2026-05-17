@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Listing = require('../models/Listing');
 const Order = require('../models/Order');
 const BuyingPost = require('../models/BuyingPost');
+const logger = require('../utils/logger');
 
 // @desc    Get dashboard overview stats
 exports.getDashboardStats = async (req, res) => {
@@ -81,6 +82,7 @@ exports.assignDeliveryPartner = async (req, res) => {
         });
 
         await order.save();
+        logger.info(`Admin assigned delivery partner`, { adminId: req.user.id, orderId, deliveryBoyId });
         res.json(order);
     } catch (err) {
         res.status(500).send('Server error');
@@ -109,6 +111,7 @@ exports.updateProductInventory = async (req, res) => {
         if (stock !== undefined) updateData.stock = stock;
 
         const listing = await Listing.findByIdAndUpdate(listingId, updateData, { new: true });
+        logger.info(`Admin updated product inventory`, { adminId: req.user.id, listingId, updateData });
         res.json(listing);
     } catch (err) {
         res.status(500).send('Server error');

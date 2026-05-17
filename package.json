@@ -30,6 +30,7 @@
     "express": "^5.2.1",
     "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^8.4.1",
+    "express-validator": "^7.3.2",
     "form-data": "^4.0.5",
     "google-auth-library": "^10.6.2",
     "helmet": "^8.1.0",
@@ -41,6 +42,7 @@
     "prom-client": "^15.1.3",
     "redis": "^5.11.0",
     "validator": "^13.15.35",
+    "winston": "^3.19.0",
     "xss-clean": "^0.1.4"
   },
   "devDependencies": {

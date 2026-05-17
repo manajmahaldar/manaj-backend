@@ -32,9 +32,8 @@ exports.createListing = async (req, res) => {
         if (req.user.role === 'hatchery' && !['Spawn', 'Fingerling'].includes(category)) {
             return res.status(403).json({ msg: 'Hatcheries can only post Spawn (Renu) or Fingerling (Chara)' });
         }
-        // Main Admin sells just Big Fish
-        if (req.user.role === 'admin' && category !== 'Fish') {
-            return res.status(403).json({ msg: 'Main Admin can only sell Big Fish' });
+        if (req.user.role === 'admin') {
+            return res.status(403).json({ msg: 'Main Admin cannot list products' });
         }
 
         const newListing = new Listing({
@@ -50,7 +49,7 @@ exports.createListing = async (req, res) => {
             phoneNumber,
             quantity,
             unit,
-            status: req.user.role === 'admin' ? 'approved' : 'pending' // Admin listings are auto-approved, others need review
+            status: 'pending' // All listings need review
         });
 
 
@@ -147,8 +146,8 @@ exports.updateListing = async (req, res) => {
         if (req.user.role === 'hatchery' && !['Spawn', 'Fingerling'].includes(category)) {
             return res.status(403).json({ msg: 'Hatcheries can only post Spawn (Renu) or Fingerling (Chara)' });
         }
-        if (req.user.role === 'admin' && category !== 'Fish') {
-            return res.status(403).json({ msg: 'Main Admin can only sell Big Fish' });
+        if (req.user.role === 'admin') {
+            return res.status(403).json({ msg: 'Main Admin cannot list products' });
         }
         
         let updateFields = {

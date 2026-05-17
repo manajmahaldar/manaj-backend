@@ -1,8 +1,10 @@
 const express    = require('express');
 const router     = express.Router();
 const rateLimit  = require('express-rate-limit');
+const { body }   = require('express-validator');
 const authCtrl   = require('../controllers/auth.controller');
 const { auth }   = require('../middleware/auth.middleware');
+const { handleValidationErrors } = require('../middleware/validate.middleware');
 
 // ── Rate limiters ─────────────────────────────────────────────────────────────
 
@@ -38,12 +40,35 @@ const refreshLimiter = rateLimit({
 // @route   POST /api/auth/register
 // @desc    Register new user
 // @access  Public
-router.post('/register', strictAuthLimiter, authCtrl.register);
+router.post(
+    '/register',
+    strictAuthLimiter,
+    [
+        body('name').notEmpty().withMessage('Name is required').trim(),
+        body('email').optional({ checkFalsy: true }).isEmail().withMessage('Invalid email address').normalizeEmail(),
+        body('phone').optional({ checkFalsy: true }).isMobilePhone('en-IN').withMessage('Invalid Indian phone number'),
+        body('password')
+            .isStrongPassword({ minLength: 8, minUppercase: 1, minLowercase: 1, minNumbers: 1, minSymbols: 1 })
+            .withMessage('Password must be 8+ chars with uppercase, lowercase, number, and symbol'),
+        body('district').notEmpty().withMessage('District is required'),
+    ],
+    handleValidationErrors,
+    authCtrl.register
+);
 
 // @route   POST /api/auth/login
 // @desc    Login with phone/email + password
 // @access  Public
-router.post('/login', strictAuthLimiter, authCtrl.login);
+router.post(
+    '/login',
+    strictAuthLimiter,
+    [
+        body('email').notEmpty().withMessage('Email/Phone is required').trim(),
+        body('password').notEmpty().withMessage('Password is required'),
+    ],
+    handleValidationErrors,
+    authCtrl.login
+);
 
 // @route   POST /api/auth/google-login
 // @desc    Login / register via Google OAuth
@@ -63,11 +88,29 @@ router.post('/logout', auth, authCtrl.logout);
 // @route   POST /api/auth/forgot-password
 // @desc    Send password reset email
 // @access  Public
-router.post('/forgot-password', passwordLimiter, authCtrl.forgotPassword);
+router.post(
+    '/forgot-password',
+    passwordLimiter,
+    [
+        body('email').isEmail().withMessage('Valid email is required').normalizeEmail(),
+    ],
+    handleValidationErrors,
+    authCtrl.forgotPassword
+);
 
 // @route   POST /api/auth/reset-password/:token
 // @desc    Reset password using token from email
 // @access  Public
-router.post('/reset-password/:token', passwordLimiter, authCtrl.resetPassword);
+router.post(
+    '/reset-password/:token',
+    passwordLimiter,
+    [
+        body('password')
+            .isStrongPassword({ minLength: 8, minUppercase: 1, minLowercase: 1, minNumbers: 1, minSymbols: 1 })
+            .withMessage('Strong password is required'),
+    ],
+    handleValidationErrors,
+    authCtrl.resetPassword
+);
 
 module.exports = router;

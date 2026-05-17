@@ -1,6 +1,11 @@
 const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
 const { Readable } = require('stream');
+const fs = require('fs');
+const path = require('path');
+const { promisify } = require('util');
+const writeFileAsync = promisify(fs.writeFile);
+const unlinkAsync = promisify(fs.unlink);
 
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -11,33 +16,77 @@ cloudinary.config({
 // Use memory storage — we stream the buffer directly to Cloudinary
 const upload = multer({ 
     storage: multer.memoryStorage(),
-    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit to accommodate videos
+    limits: { 
+        fileSize: 200 * 1024 * 1024 // 200MB limit for admin video uploads
+    },
     fileFilter: (req, file, cb) => {
-        if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
+        const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        const allowedVideoTypes = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/webm'];
+        const allowedDocTypes   = ['application/pdf'];
+
+        if (allowedImageTypes.includes(file.mimetype) || 
+            allowedVideoTypes.includes(file.mimetype) || 
+            allowedDocTypes.includes(file.mimetype)) {
+            
+            // Tighten size limit for non-videos
+            if (!file.mimetype.startsWith('video/') && file.size > 5 * 1024 * 1024) {
+                return cb(new Error('File size too large. Images and PDFs must be under 5MB.'), false);
+            }
+            
             cb(null, true);
         } else {
-            cb(new Error('Invalid file type. Only images and videos are allowed.'), false);
+            cb(new Error('Invalid file type. Only JPG, PNG, WebP, MP4, and PDF are allowed.'), false);
         }
     }
 });
 
 /**
- * Upload a file buffer to Cloudinary via a stream.
- * Returns a Promise resolving to the Cloudinary upload result.
+ * Upload a file buffer to Cloudinary.
+ * Uses chunked upload_large for videos/large files (>10MB) to prevent timeouts.
  */
-const uploadToCloudinary = (buffer, options = {}) => {
-    return new Promise((resolve, reject) => {
-        const uploadOptions = {
-            folder: 'fish_marketplace/listings',
-            resource_type: 'auto',
-            ...options
-        };
-        const stream = cloudinary.uploader.upload_stream(uploadOptions, (error, result) => {
-            if (error) return reject(error);
-            resolve(result);
+const uploadToCloudinary = async (buffer, options = {}) => {
+    const isVideo = options.resource_type === 'video' || (options.file && options.file.mimetype && options.file.mimetype.startsWith('video/'));
+    const uploadOptions = {
+        folder: options.folder || 'fish_marketplace/listings',
+        resource_type: options.resource_type || 'auto',
+        ...options
+    };
+
+    if (isVideo || buffer.length > 10 * 1024 * 1024) {
+        // Use upload_large with a temp file for videos and large files to prevent timeouts
+        const tempDir = path.join(__dirname, '../../temp');
+        if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
+        }
+        const tempFilePath = path.join(tempDir, `upload_${Date.now()}_${Math.round(Math.random() * 1e9)}`);
+        
+        try {
+            await writeFileAsync(tempFilePath, buffer);
+            const result = await new Promise((resolve, reject) => {
+                cloudinary.uploader.upload_large(tempFilePath, {
+                    chunk_size: 6000000, // 6MB chunks
+                    ...uploadOptions
+                }, (error, uploadResult) => {
+                    if (error) return reject(error);
+                    resolve(uploadResult);
+                });
+            });
+            return result;
+        } finally {
+            if (fs.existsSync(tempFilePath)) {
+                await unlinkAsync(tempFilePath);
+            }
+        }
+    } else {
+        // Fallback to standard stream upload for normal/small files
+        return new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream(uploadOptions, (error, result) => {
+                if (error) return reject(error);
+                resolve(result);
+            });
+            Readable.from(buffer).pipe(stream);
         });
-        Readable.from(buffer).pipe(stream);
-    });
+    }
 };
 
 module.exports = { cloudinary, upload, uploadToCloudinary };

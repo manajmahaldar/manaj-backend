@@ -161,7 +161,12 @@ app.use('/api/listings', require('./routes/listing.routes.js'));
 app.use('/api/posts', require('./routes/buying-post.routes.js'));
 app.use('/api/orders', require('./routes/order.routes.js'));
 app.use('/api/admin', require('./routes/admin.routes.js'));
+app.use('/api/admin/media', require('./routes/media.routes.js'));
 app.use('/api/knowledge', require('./routes/knowledge.routes.js'));
+
+// Public hero settings endpoint
+const { getHeroSettings } = require('./controllers/media.controller');
+app.get('/api/hero-settings', getHeroSettings);
 
 // Role-specific RBAC routes
 app.use('/api/farmer', require('./routes/farmer.routes.js'));
@@ -193,10 +198,12 @@ app.get('/debug-sentry', function mainHandler(_req, _res) {
 // Sentry error handler must be before any other error middleware and after all controllers
 Sentry.setupExpressErrorHandler(app);
 
+const logger = require('./utils/logger');
+
 // Global error handler
 app.use((err, _req, res, _next) => {
-  // Log full error internally
-  console.error(err.stack);
+  // Log full error internally with Winston
+  logger.error(`${err.message}`, { stack: err.stack, method: _req.method, url: _req.originalUrl });
 
   // Return clean message to client
   const isProd = process.env.NODE_ENV === 'production';
