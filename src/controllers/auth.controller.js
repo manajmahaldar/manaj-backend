@@ -8,8 +8,9 @@ const AuditLog  = require('../models/AuditLog');
 const logger    = require('../utils/logger');
 const sendEmail = require('../utils/sendEmail');
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '613301631751-4m4t7be6u5cc37j651lco62j2p57564n.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_ID.trim()) || '613301631751-4m4t7be6u5cc37j651lco62j2p57564n.apps.googleusercontent.com';
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
+
 
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -422,7 +423,7 @@ exports.googleLogin = async (req, res) => {
         });
     } catch (err) {
         console.error('Google login error:', err.message);
-        return res.status(401).json({ msg: 'Google authentication failed. Invalid token.' });
+        return res.status(401).json({ msg: `Google authentication failed: ${err.message}` });
     }
 };
 
