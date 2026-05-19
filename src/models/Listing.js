@@ -16,6 +16,7 @@ const listingSchema = new mongoose.Schema({
     lastPriceUpdate: { type: Date, default: Date.now },
     district: { type: String, required: true },
     localDistrict: { type: String, default: '' },
+    policeStation: { type: String, default: '' },
     description: { type: String, required: true },
     photos: [{ type: String }], // Cloudinary URLs
     video: { type: String, default: '' }, // Cloudinary URL for 10s video

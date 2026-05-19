@@ -5,7 +5,7 @@ const { clearCache } = require('../middleware/cache');
 
 exports.createListing = async (req, res) => {
     try {
-        const { productName, category, price, district, localDistrict, description, phoneNumber, quantity, unit } = req.body;
+        const { productName, category, price, district, localDistrict, policeStation, description, phoneNumber, quantity, unit } = req.body;
         
         // Upload files to Cloudinary, separating photos and video
         const photos = [];
@@ -43,6 +43,7 @@ exports.createListing = async (req, res) => {
             price,
             district,
             localDistrict,
+            policeStation: policeStation || '',
             description,
             photos,
             video,
@@ -89,7 +90,7 @@ exports.getListings = async (req, res) => {
 
         const [listings, total] = await Promise.all([
             Listing.find(query)
-                .populate('sellerId', 'name district verifiedStatus role profilePicture')
+                .populate('sellerId', 'name district localDistrict policeStation verifiedStatus role profilePicture')
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(parseInt(limit))
@@ -134,7 +135,7 @@ exports.getMyListings = async (req, res) => {
 
 exports.updateListing = async (req, res) => {
     try {
-        const { productName, category, price, district, localDistrict, description, phoneNumber, quantity, unit } = req.body;
+        const { productName, category, price, district, localDistrict, policeStation, description, phoneNumber, quantity, unit } = req.body;
         
         // Role-based category validation
         if (req.user.role === 'seller' && !['Feed', 'Medicine'].includes(category)) {
@@ -156,6 +157,7 @@ exports.updateListing = async (req, res) => {
             price,
             district,
             localDistrict,
+            policeStation,
             description,
             phoneNumber,
             quantity,

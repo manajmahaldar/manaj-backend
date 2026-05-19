@@ -18,6 +18,7 @@ const userSchema = new mongoose.Schema({
     },
     district: { type: String, required: function () { return !this.googleId; } },
     localDistrict: { type: String, default: '' },
+    policeStation: { type: String, default: '' },
     role: {
         type: String,
         enum: ['farmer', 'seller', 'trader', 'hatchery', 'admin', 'delivery_partner'],

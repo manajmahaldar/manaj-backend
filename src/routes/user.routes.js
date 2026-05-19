@@ -39,13 +39,14 @@ router.post('/profile-picture', auth, upload.single('image'), async (req, res) =
 // @access  Private
 router.put('/profile', auth, async (req, res) => {
     try {
-        const { name, district, localDistrict, phone } = req.body;
+        const { name, district, localDistrict, policeStation, phone } = req.body;
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ msg: 'User not found' });
 
         if (name) user.name = name;
         if (district) user.district = district;
         if (localDistrict !== undefined) user.localDistrict = localDistrict;
+        if (policeStation !== undefined) user.policeStation = policeStation;
         
         if (phone) {
             // Normalize and validate Indian mobile number
@@ -83,7 +84,7 @@ router.put('/verify-profile', auth, upload.fields([
     { name: 'video', maxCount: 1 }
 ]), async (req, res) => {
     try {
-        const { name, email, phone, district, localDistrict } = req.body;
+        const { name, email, phone, district, localDistrict, policeStation } = req.body;
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ msg: 'User not found' });
 
@@ -92,6 +93,7 @@ router.put('/verify-profile', auth, upload.fields([
         if (email) user.email = email;
         if (district) user.district = district;
         if (localDistrict !== undefined) user.localDistrict = localDistrict;
+        if (policeStation !== undefined) user.policeStation = policeStation;
 
         if (phone) {
             // Normalize and validate Indian mobile number

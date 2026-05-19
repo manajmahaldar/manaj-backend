@@ -92,7 +92,7 @@ const normalizePhone = (phone) => {
 
 // ── Register ──────────────────────────────────────────────────────────────────
 exports.register = async (req, res) => {
-    const { name, phone, email, password, district, role } = req.body;
+    const { name, phone, email, password, district, localDistrict, policeStation, role } = req.body;
 
     // — Input validation —
     if (!name || !password || !district) {
@@ -148,6 +148,8 @@ exports.register = async (req, res) => {
             email:    normalizedEmail,
             password,
             district,
+            localDistrict: localDistrict || '',
+            policeStation: policeStation || '',
             role: role || 'farmer'
         });
         await user.save();
@@ -171,6 +173,8 @@ exports.register = async (req, res) => {
                 email:    user.email,
                 role:     user.role,
                 district: user.district,
+                localDistrict: user.localDistrict,
+                policeStation: user.policeStation,
                 accountStatus: user.accountStatus
             }
         });
@@ -269,6 +273,8 @@ exports.login = async (req, res) => {
                 email:         user.email,
                 role:          user.role,
                 district:      user.district,
+                localDistrict: user.localDistrict,
+                policeStation: user.policeStation,
                 accountStatus: user.accountStatus,
                 profilePicture: user.profilePicture
             }
@@ -417,6 +423,8 @@ exports.googleLogin = async (req, res) => {
                 phone:          user.phone,
                 role:           user.role,
                 district:       user.district,
+                localDistrict:  user.localDistrict,
+                policeStation:  user.policeStation,
                 profilePicture: user.profilePicture,
                 accountStatus:  user.accountStatus
             }
