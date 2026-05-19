@@ -20,22 +20,18 @@ const upload = multer({
         fileSize: 200 * 1024 * 1024 // 200MB limit for admin video uploads
     },
     fileFilter: (req, file, cb) => {
-        const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp'];
-        const allowedVideoTypes = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/webm'];
+        const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
         const allowedDocTypes   = ['application/pdf'];
 
-        if (allowedImageTypes.includes(file.mimetype) || 
-            allowedVideoTypes.includes(file.mimetype) || 
-            allowedDocTypes.includes(file.mimetype)) {
-            
-            // Tighten size limit for non-videos
-            if (!file.mimetype.startsWith('video/') && file.size > 5 * 1024 * 1024) {
-                return cb(new Error('File size too large. Images and PDFs must be under 5MB.'), false);
-            }
-            
+        const isImage = allowedImageTypes.includes(file.mimetype);
+        // Accept any video/* MIME type (handles video/webm, video/webm;codecs=vp9, video/mp4, etc.)
+        const isVideo = file.mimetype.startsWith('video/');
+        const isDoc   = allowedDocTypes.includes(file.mimetype);
+
+        if (isImage || isVideo || isDoc) {
             cb(null, true);
         } else {
-            cb(new Error('Invalid file type. Only JPG, PNG, WebP, MP4, and PDF are allowed.'), false);
+            cb(new Error('Invalid file type. Only JPG, PNG, WebP, video files, and PDF are allowed.'), false);
         }
     }
 });

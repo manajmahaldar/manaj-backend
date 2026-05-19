@@ -60,15 +60,50 @@ router.get('/users', auth, admin, async (req, res) => {
 });
 
 // @route   GET api/admin/pending-users
-// @desc    Get all users pending verification
+// @desc    Get users who submitted aadhaar for verification (admin review queue)
 router.get('/pending-users', auth, admin, async (req, res) => {
     try {
-        const users = await User.find({ 
+        // Users who have actually submitted their verification documents
+        const usersWithDocs = await User.find({ 
             accountStatus: 'pending',
-            aadhaarCard: { $ne: "" } 
-        }).select('-password').lean();
-        res.json(users);
+            aadhaarCard: { $exists: true, $nin: [null, ""] }
+        })
+        .select('-password -refreshTokens -resetPasswordToken -resetPasswordExpires -failedLoginAttempts -lockUntil')
+        .lean();
+
+        // Count of users who registered but haven't submitted docs yet
+        const pendingRegistrationsCount = await User.countDocuments({
+            accountStatus: 'pending',
+            role: { $ne: 'admin' },
+            $or: [
+                { aadhaarCard: { $exists: false } },
+                { aadhaarCard: null },
+                { aadhaarCard: "" }
+            ]
+        });
+
+        res.json({ 
+            users: usersWithDocs,
+            pendingRegistrationsCount
+        });
     } catch (err) {
+        console.error('pending-users error:', err);
+        res.status(500).send('Server error');
+    }
+});
+
+
+// @route   GET api/admin/users/:id
+// @desc    Get a single user's full details (Admin only)
+router.get('/users/:id', auth, admin, async (req, res) => {
+    try {
+        const user = await User.findById(req.params.id)
+            .select('-password -refreshTokens -resetPasswordToken -resetPasswordExpires -failedLoginAttempts -lockUntil')
+            .lean();
+        if (!user) return res.status(404).json({ msg: 'User not found' });
+        res.json(user);
+    } catch (err) {
+        console.error('get user by id error:', err);
         res.status(500).send('Server error');
     }
 });
