@@ -383,7 +383,7 @@ exports.googleLogin = async (req, res) => {
                 profilePicture: picture,
                 role:           role || 'farmer',
                 district:       district || '',
-                accountStatus:  'active'
+                accountStatus:  'pending'
             });
             await user.save();
             await AuditLog.record({ userId: user._id, action: 'register', req, meta: { provider: 'google' } });
