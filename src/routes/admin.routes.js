@@ -60,26 +60,31 @@ router.get('/users', auth, admin, async (req, res) => {
 });
 
 // @route   GET api/admin/pending-users
-// @desc    Get users who submitted aadhaar for verification (admin review queue)
+// @desc    Get users who submitted verification details (admin review queue)
 router.get('/pending-users', auth, admin, async (req, res) => {
     try {
-        // Users who have actually submitted their verification documents
+        // Users who have submitted verification details (Aadhaar, Video, or Local District/Police Station)
         const usersWithDocs = await User.find({ 
             accountStatus: 'pending',
-            aadhaarCard: { $exists: true, $nin: [null, ""] }
+            role: { $ne: 'admin' },
+            $or: [
+                { aadhaarCard: { $exists: true, $nin: [null, ""] } },
+                { verificationVideo: { $exists: true, $nin: [null, ""] } },
+                { localDistrict: { $exists: true, $nin: [null, ""] } },
+                { policeStation: { $exists: true, $nin: [null, ""] } }
+            ]
         })
         .select('-password -refreshTokens -resetPasswordToken -resetPasswordExpires -failedLoginAttempts -lockUntil')
         .lean();
 
-        // Count of users who registered but haven't submitted docs yet
+        // Count of users who registered but haven't filled out verification details yet
         const pendingRegistrationsCount = await User.countDocuments({
             accountStatus: 'pending',
             role: { $ne: 'admin' },
-            $or: [
-                { aadhaarCard: { $exists: false } },
-                { aadhaarCard: null },
-                { aadhaarCard: "" }
-            ]
+            aadhaarCard: { $in: [null, ""] },
+            verificationVideo: { $in: [null, ""] },
+            localDistrict: { $in: [null, ""] },
+            policeStation: { $in: [null, ""] }
         });
 
         res.json({ 

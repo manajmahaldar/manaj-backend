@@ -219,7 +219,7 @@ exports.login = async (req, res) => {
         }
 
         // Account lockout check
-        if (user.isLocked) {
+        if (user.isLocked && user.role !== 'admin') {
             await AuditLog.record({ userId: user._id, action: 'login_locked', req });
             return res.status(423).json({
                 msg: `Account temporarily locked due to too many failed attempts. Please try again in a moment.`
@@ -233,9 +233,15 @@ exports.login = async (req, res) => {
 
         const isMatch = await user.comparePassword(password);
         if (!isMatch) {
-            await user.incFailedAttempts();
+            if (user.role !== 'admin') {
+                await user.incFailedAttempts();
+            }
             await AuditLog.record({ userId: user._id, action: 'login_fail', req, meta: { reason: 'wrong_password' } });
             logger.warn(`Login failed: Incorrect password`, { userId: user._id, email: user.email, ip: req.ip });
+
+            if (user.role === 'admin') {
+                return res.status(401).json({ msg: 'Invalid credentials.' });
+            }
 
             const attemptsLeft = Math.max(0, 1000 - (user.failedLoginAttempts + 1));
             const msg = attemptsLeft > 0
@@ -345,12 +351,13 @@ exports.logout = async (req, res) => {
     const hashed = hashToken(raw);
 
     try {
-        await User.findOneAndUpdate(
+        const user = await User.findOneAndUpdate(
             { 'refreshTokens.token': hashed },
             { $pull: { refreshTokens: { token: hashed } } }
         );
-        if (req.user) {
-            await AuditLog.record({ userId: req.user._id, action: 'logout', req });
+        const userId = req.user?._id || user?._id;
+        if (userId) {
+            await AuditLog.record({ userId, action: 'logout', req });
         }
         return res.status(200).json({ msg: 'Logged out successfully.' });
     } catch (err) {

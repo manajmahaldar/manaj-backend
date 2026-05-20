@@ -82,8 +82,8 @@ router.post('/refresh-token', refreshLimiter, authCtrl.refreshToken);
 
 // @route   POST /api/auth/logout
 // @desc    Invalidate refresh token + clear cookie
-// @access  Protected
-router.post('/logout', auth, authCtrl.logout);
+// @access  Protected (non-strict)
+router.post('/logout', authCtrl.logout);
 
 // @route   POST /api/auth/forgot-password
 // @desc    Send password reset email
