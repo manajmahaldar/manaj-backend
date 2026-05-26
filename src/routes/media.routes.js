@@ -1,6 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const { auth, admin } = require('../middleware/auth.middleware');
+const { cache, clearCache } = require('../middleware/cache');
 const { upload } = require('../config/cloudinary');
 const {
     uploadMedia,
@@ -33,6 +34,6 @@ router.put('/hero-settings', auth, admin, updateHeroSettings);
 // ── Public route ──────────────────────────────────────────────────────────────
 
 // Fetch current Hero settings (read-only, no auth)
-router.get('/hero-settings', getHeroSettings);
+router.get('/hero-settings', cache(3600), getHeroSettings);
 
 module.exports = router;

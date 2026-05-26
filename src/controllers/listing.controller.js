@@ -2,6 +2,7 @@ const Listing = require('../models/Listing');
 const User = require('../models/User'); // Added User import for role-based filtering
 const { uploadToCloudinary } = require('../config/cloudinary');
 const { clearCache } = require('../middleware/cache');
+const FraudService = require('../services/FraudService');
 
 exports.createListing = async (req, res) => {
     try {
@@ -36,6 +37,10 @@ exports.createListing = async (req, res) => {
             return res.status(403).json({ msg: 'Main Admin cannot list products' });
         }
 
+        const fraudResult = await FraudService.detectListingSpam(req.user.id, {
+            productName, category, description
+        }, 'Listing');
+
         const newListing = new Listing({
             sellerId: req.user.id,
             productName,
@@ -50,7 +55,10 @@ exports.createListing = async (req, res) => {
             phoneNumber,
             quantity,
             unit,
-            status: 'pending' // All listings need review
+            status: 'pending', // All listings need review
+            isFlagged: fraudResult.isFlagged,
+            fraudReason: fraudResult.reason,
+            fraudScore: fraudResult.fraudScore
         });
 
 
@@ -125,7 +133,7 @@ exports.updateListingStatus = async (req, res) => {
 
 exports.getMyListings = async (req, res) => {
     try {
-        const listings = await Listing.find({ sellerId: req.user.id }).sort({ createdAt: -1 });
+        const listings = await Listing.find({ sellerId: req.user.id }).sort({ createdAt: -1 }).lean();
         res.json(listings);
     } catch (err) {
         console.error('Error fetching my listings:', err);

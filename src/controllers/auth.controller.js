@@ -7,6 +7,7 @@ const User      = require('../models/User');
 const AuditLog  = require('../models/AuditLog');
 const logger    = require('../utils/logger');
 const sendEmail = require('../utils/sendEmail');
+const FraudService = require('../services/FraudService');
 
 const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_ID.trim()) || '613301631751-4m4t7be6u5cc37j651lco62j2p57564n.apps.googleusercontent.com';
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
@@ -142,6 +143,10 @@ exports.register = async (req, res) => {
             }
         }
 
+        const fraudResult = await FraudService.detectFakeUser({
+            name, phone: normalizedPhone, email: normalizedEmail
+        }, req.ip);
+
         const user = new User({
             name,
             phone:    normalizedPhone,
@@ -150,7 +155,11 @@ exports.register = async (req, res) => {
             district,
             localDistrict: localDistrict || '',
             policeStation: policeStation || '',
-            role: role || 'farmer'
+            role: role || 'farmer',
+            registrationIp: req.ip || '',
+            trustScore: fraudResult.trustScore,
+            isFlagged: fraudResult.isFlagged,
+            fraudReason: fraudResult.reason
         });
         await user.save();
 
@@ -266,7 +275,7 @@ exports.login = async (req, res) => {
         }
         await User.updateOne(
             { _id: user._id },
-            { $set: { refreshTokens: user.refreshTokens, lastLogin: new Date() } }
+            { $set: { refreshTokens: user.refreshTokens, lastLogin: new Date(), lastLoginIp: req.ip || '' } }
         );
 
         setCookieOptions(res, raw);
@@ -383,6 +392,10 @@ exports.googleLogin = async (req, res) => {
             if (user) {
                 return res.status(401).json({ msg: 'Account already exists. Please log in.' });
             }
+            const fraudResult = await FraudService.detectFakeUser({
+                name, email: normalizedEmail
+            }, req.ip);
+
             user = new User({
                 googleId,
                 email,
@@ -390,7 +403,11 @@ exports.googleLogin = async (req, res) => {
                 profilePicture: picture,
                 role:           role || 'farmer',
                 district:       district || '',
-                accountStatus:  'pending'
+                accountStatus:  'pending',
+                registrationIp: req.ip || '',
+                trustScore:     fraudResult.trustScore,
+                isFlagged:      fraudResult.isFlagged,
+                fraudReason:    fraudResult.reason
             });
             await user.save();
             await AuditLog.record({ userId: user._id, action: 'register', req, meta: { provider: 'google' } });
@@ -416,6 +433,7 @@ exports.googleLogin = async (req, res) => {
             user.refreshTokens = user.refreshTokens.slice(-MAX_REFRESH_TOKENS_PER_USER);
         }
         user.lastLogin = new Date();
+        user.lastLoginIp = req.ip || '';
         await user.save();
 
         await AuditLog.record({ userId: user._id, action: 'login_success', req, meta: { provider: 'google' } });

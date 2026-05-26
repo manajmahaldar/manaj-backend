@@ -52,6 +52,7 @@ exports.getAllOrders = async (req, res) => {
             .sort({ createdAt: -1 })
             .limit(limit * 1)
             .skip((page - 1) * limit)
+            .lean()
             .exec();
 
         const count = await Order.countDocuments(query);

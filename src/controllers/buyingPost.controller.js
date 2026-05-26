@@ -1,18 +1,20 @@
 const BuyingPost = require('../models/BuyingPost');
 const { uploadToCloudinary } = require('../config/cloudinary');
 const { clearCache } = require('../middleware/cache');
+const FraudService = require('../services/FraudService');
 
 exports.createPost = async (req, res) => {
     try {
-        if (req.user.role !== 'trader' && req.user.role !== 'admin') {
-            return res.status(403).json({ msg: 'Only traders can create buying posts' });
-        }
 
         const { category, fishName, size, requiredQuantity, buyingPrice, district, phoneNumber } = req.body;
         const photos = req.files && req.files.length > 0
             ? await Promise.all(req.files.map(file => uploadToCloudinary(file.buffer).then(r => r.secure_url)))
             : [];
         
+        const fraudResult = await FraudService.detectListingSpam(req.user.id, {
+            fishName, category
+        }, 'BuyingPost');
+
         const newPost = new BuyingPost({
             traderId: req.user.id,
             category,
@@ -22,7 +24,10 @@ exports.createPost = async (req, res) => {
             buyingPrice,
             district,
             phoneNumber,
-            photos
+            photos,
+            isFlagged: fraudResult.isFlagged,
+            fraudReason: fraudResult.reason,
+            fraudScore: fraudResult.fraudScore
         });
 
         await newPost.save();
@@ -37,7 +42,7 @@ exports.createPost = async (req, res) => {
 exports.getMyPosts = async (req, res) => {
     try {
         // STRICT ISOLATION: Always filter by authenticated user ID
-        const posts = await BuyingPost.find({ traderId: req.user.id }).sort({ createdAt: -1 });
+        const posts = await BuyingPost.find({ traderId: req.user.id }).sort({ createdAt: -1 }).lean();
         res.json(posts);
     } catch (err) {
         res.status(500).send('Server error');

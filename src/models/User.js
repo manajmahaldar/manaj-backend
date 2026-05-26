@@ -34,6 +34,16 @@ const userSchema = new mongoose.Schema({
     verificationRejectedReason: { type: String, default: '' },
     profilePicture:             { type: String, default: '' },
 
+    // --- Verification Audit Trail ---
+    verifiedBy:                 { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    verifiedAt:                 { type: Date, default: null },
+    verificationHistory: [{
+        status:    { type: String, enum: ['pending', 'verified', 'rejected', 'suspended'], required: true },
+        changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        changedAt: { type: Date, default: Date.now },
+        reason:    { type: String, default: '' }
+    }],
+
     // --- Password reset ---
     resetPasswordToken:   { type: String, select: false },
     resetPasswordExpires: { type: Date,   select: false },
@@ -47,6 +57,13 @@ const userSchema = new mongoose.Schema({
     // --- Refresh tokens (hashed, rotate on use) ---
     refreshTokens: { type: [refreshTokenSchema], default: [] },
 
+    // --- Fraud Detection ---
+    trustScore:     { type: Number, default: 100 },
+    isFlagged:      { type: Boolean, default: false },
+    fraudReason:    { type: String, default: '' },
+    registrationIp: { type: String, default: '' },
+    lastLoginIp:    { type: String, default: '' },
+
     createdAt: { type: Date, default: Date.now }
 });
 
@@ -54,6 +71,11 @@ const userSchema = new mongoose.Schema({
 // phone, email, googleId are already indexed via unique:true in schema
 userSchema.index({ accountStatus: 1 });
 userSchema.index({ role: 1 });
+// Compound indexes for admin filtering & sorting
+userSchema.index({ district: 1, localDistrict: 1, policeStation: 1 }); // location cascade
+userSchema.index({ createdAt: -1 }); // date sorting
+userSchema.index({ verifiedStatus: 1, accountStatus: 1 }); // verification filtering
+userSchema.index({ name: 'text', phone: 'text' }); // text search
 
 // ── Virtual: isLocked ─────────────────────────────────────────────────────────
 userSchema.virtual('isLocked').get(function () {

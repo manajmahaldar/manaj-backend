@@ -1,13 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { auth, admin, isVerified } = require('../middleware/auth.middleware');
+const { auth, admin, isVerified, authorizeRoles } = require('../middleware/auth.middleware');
 const { upload } = require('../config/cloudinary');
 const { cache } = require('../middleware/cache');
 const postController = require('../controllers/buyingPost.controller');
 
 // @route   POST api/posts
 // @desc    Create a buying post
-router.post('/', auth, isVerified, (req, res, next) => {
+router.post('/', auth, isVerified, authorizeRoles('trader', 'admin'), (req, res, next) => {
     upload.array('photos', 3)(req, res, (err) => {
         if (err) {
             console.error('Multer/Cloudinary Error:', err);
@@ -19,11 +19,11 @@ router.post('/', auth, isVerified, (req, res, next) => {
 
 // @route   GET api/posts/my-posts
 // @desc    Get user's own buying posts
-router.get('/my-posts', auth, postController.getMyPosts);
+router.get('/my-posts', auth, authorizeRoles('trader'), postController.getMyPosts);
 
 // @route   PUT api/posts/:id
 // @desc    Update a buying post
-router.put('/:id', auth, isVerified, (req, res, next) => {
+router.put('/:id', auth, isVerified, authorizeRoles('trader', 'admin'), (req, res, next) => {
     upload.array('photos', 3)(req, res, (err) => {
         if (err) {
             console.error('Multer/Cloudinary Error:', err);
@@ -35,7 +35,7 @@ router.put('/:id', auth, isVerified, (req, res, next) => {
 
 // @route   DELETE api/posts/:id
 // @desc    Delete a buying post
-router.delete('/:id', auth, postController.deletePost);
+router.delete('/:id', auth, authorizeRoles('trader', 'admin'), postController.deletePost);
 
 // @route   GET api/posts
 // @desc    Get all approved posts

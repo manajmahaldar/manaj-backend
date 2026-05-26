@@ -1,6 +1,7 @@
 const SiteMedia    = require('../models/SiteMedia');
 const HeroSettings = require('../models/HeroSettings');
 const { cloudinary, uploadToCloudinary } = require('../config/cloudinary');
+const { clearCache } = require('../middleware/cache');
 const logger = require('../utils/logger');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -149,6 +150,7 @@ exports.updateHeroSettings = async (req, res) => {
             { new: true, upsert: true }
         );
 
+        clearCache('/api/hero-settings');
         logger.info('Admin updated hero settings', { adminId: req.user.id });
         res.json({ msg: 'Hero settings updated', settings });
     } catch (err) {

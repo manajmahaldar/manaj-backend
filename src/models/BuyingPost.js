@@ -19,6 +19,12 @@ const buyingPostSchema = new mongoose.Schema({
         enum: ['pending', 'approved', 'rejected'], 
         default: 'pending' 
     },
+
+    // --- Fraud Detection ---
+    isFlagged:   { type: Boolean, default: false },
+    fraudReason: { type: String, default: '' },
+    fraudScore:  { type: Number, default: 0 },
+
     createdAt: { type: Date, default: Date.now }
 });
 
