@@ -120,6 +120,19 @@ exports.getListings = async (req, res) => {
     }
 };
 
+exports.getListingById = async (req, res) => {
+    try {
+        const listing = await Listing.findById(req.params.id)
+            .populate('sellerId', 'name district localDistrict policeStation verifiedStatus role profilePicture')
+            .lean();
+        if (!listing) return res.status(404).json({ msg: 'Listing not found' });
+        res.json(listing);
+    } catch (err) {
+        console.error('Error in getListingById:', err);
+        res.status(500).send('Server error');
+    }
+};
+
 exports.updateListingStatus = async (req, res) => {
     try {
         const { status } = req.body;

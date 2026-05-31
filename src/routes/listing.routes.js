@@ -22,6 +22,10 @@ router.post('/', auth, isVerified, authorizeRoles('seller', 'farmer', 'hatchery'
 // @desc    Get all approved listings
 router.get('/', cache(3600), listingController.getListings);
 
+// @route   GET api/listings/:id
+// @desc    Get single listing
+router.get('/:id', listingController.getListingById);
+
 // @route   PUT api/listings/:id/status
 // @desc    Approve/Reject listing (Admin only)
 router.put('/:id/status', auth, admin, listingController.updateListingStatus);

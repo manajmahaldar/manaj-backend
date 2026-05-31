@@ -143,3 +143,16 @@ exports.updatePostStatus = async (req, res) => {
         res.status(500).send('Server error');
     }
 };
+
+exports.getPostById = async (req, res) => {
+    try {
+        const post = await BuyingPost.findById(req.params.id)
+            .populate('traderId', 'name district verifiedStatus role profilePicture')
+            .lean();
+        if (!post) return res.status(404).json({ msg: 'Post not found' });
+        res.json(post);
+    } catch (err) {
+        console.error('Error in getPostById:', err);
+        res.status(500).send('Server error');
+    }
+};

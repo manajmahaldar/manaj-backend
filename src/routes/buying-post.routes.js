@@ -41,6 +41,10 @@ router.delete('/:id', auth, authorizeRoles('trader', 'admin'), postController.de
 // @desc    Get all approved posts
 router.get('/', cache(3600), postController.getAllPosts);
 
+// @route   GET api/posts/:id
+// @desc    Get single post
+router.get('/:id', postController.getPostById);
+
 // @route   PUT api/posts/:id/status
 // @desc    Update post status (Admin only)
 router.put('/:id/status', auth, admin, postController.updatePostStatus);
