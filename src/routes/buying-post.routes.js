@@ -19,7 +19,7 @@ router.post('/', auth, isVerified, authorizeRoles('trader', 'admin'), (req, res,
 
 // @route   GET api/posts/my-posts
 // @desc    Get user's own buying posts
-router.get('/my-posts', auth, authorizeRoles('trader'), postController.getMyPosts);
+router.get('/my-posts', auth, postController.getMyPosts);
 
 // @route   PUT api/posts/:id
 // @desc    Update a buying post

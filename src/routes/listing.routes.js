@@ -22,6 +22,10 @@ router.post('/', auth, isVerified, authorizeRoles('seller', 'farmer', 'hatchery'
 // @desc    Get all approved listings
 router.get('/', cache(3600), listingController.getListings);
 
+// @route   GET api/listings/my-listings
+// @desc    Get user's own listings (must be BEFORE /:id)
+router.get('/my-listings', auth, listingController.getMyListings);
+
 // @route   GET api/listings/:id
 // @desc    Get single listing
 router.get('/:id', listingController.getListingById);
@@ -29,10 +33,6 @@ router.get('/:id', listingController.getListingById);
 // @route   PUT api/listings/:id/status
 // @desc    Approve/Reject listing (Admin only)
 router.put('/:id/status', auth, admin, listingController.updateListingStatus);
-
-// @route   GET api/listings/my-listings
-// @desc    Get user's own listings
-router.get('/my-listings', auth, authorizeRoles('seller', 'farmer', 'hatchery'), listingController.getMyListings);
 
 // @route   PUT api/listings/:id
 // @desc    Update a listing
