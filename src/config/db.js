@@ -83,7 +83,7 @@ const seedAdminIfNeeded = async () => {
 
 const connectDB = async () => {
     try {
-        const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/fish-marketplace');
+        const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/fish-marketplace', { family: 4 });
         console.log(`Connected to MongoDB: ${conn.connection.host}`);
         await seedAdminIfNeeded();
     } catch (err) {

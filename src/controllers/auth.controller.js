@@ -202,6 +202,81 @@ exports.register = async (req, res) => {
     }
 };
 
+// ── Mock OTP Flow ─────────────────────────────────────────────────────────────
+exports.sendOtp = async (req, res) => {
+    const { mobile } = req.body;
+    if (!mobile) return res.status(400).json({ msg: 'Mobile number is required' });
+    
+    // In a real app, integrate SMS gateway (Twilio, MSG91, AWS SNS, etc.)
+    logger.info(`[Mock OTP] Sent OTP '1234' to ${mobile}`);
+    return res.status(200).json({ msg: 'OTP sent successfully' });
+};
+
+exports.verifyOtp = async (req, res) => {
+    const { mobile, otp } = req.body;
+    if (!mobile || !otp) return res.status(400).json({ msg: 'Mobile and OTP are required' });
+
+    // Mock verification: accept '1234' for any number
+    if (otp !== '1234') {
+        return res.status(400).json({ msg: 'Invalid OTP' });
+    }
+
+    try {
+        const normalizedPhone = normalizePhone(mobile);
+        let user = await User.findOne({ phone: normalizedPhone }).select('+refreshTokens');
+
+        if (!user) {
+            // Auto-register mock user for seamless login
+            user = new User({
+                name: 'Guest ' + normalizedPhone,
+                phone: normalizedPhone,
+                district: 'Unknown',
+                role: 'farmer',
+                accountStatus: 'active'
+            });
+            await user.save();
+            await AuditLog.record({ userId: user._id, action: 'register', req, meta: { provider: 'otp' } });
+        }
+
+        if (user.accountStatus === 'suspended') {
+            return res.status(403).json({ msg: 'Account suspended. Contact support.' });
+        }
+
+        const accessToken = signAccessToken(user);
+        const { raw, hashed } = generateRefreshToken();
+
+        user.refreshTokens.push({ token: hashed, createdAt: new Date() });
+        if (user.refreshTokens.length > MAX_REFRESH_TOKENS_PER_USER) {
+            user.refreshTokens = user.refreshTokens.slice(-MAX_REFRESH_TOKENS_PER_USER);
+        }
+        user.lastLogin = new Date();
+        user.lastLoginIp = req.ip || '';
+        await user.save();
+
+        await AuditLog.record({ userId: user._id, action: 'login_success', req, meta: { provider: 'otp' } });
+
+        setCookieOptions(res, raw);
+        return res.json({
+            token: accessToken,
+            user: {
+                id:            user._id,
+                name:          user.name,
+                phone:         user.phone,
+                email:         user.email,
+                role:          user.role,
+                district:      user.district,
+                localDistrict: user.localDistrict,
+                policeStation: user.policeStation,
+                accountStatus: user.accountStatus,
+                profilePicture: user.profilePicture
+            }
+        });
+    } catch (err) {
+        console.error('Verify OTP error:', err);
+        return res.status(500).json({ msg: 'Server error' });
+    }
+};
+
 // ── Login ─────────────────────────────────────────────────────────────────────
 exports.login = async (req, res) => {
     const { email, password } = req.body;

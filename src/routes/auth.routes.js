@@ -56,6 +56,16 @@ router.post(
     authCtrl.register
 );
 
+// @route   POST /api/auth/send-otp
+// @desc    Send OTP to mobile (Mock)
+// @access  Public
+router.post('/send-otp', strictAuthLimiter, authCtrl.sendOtp);
+
+// @route   POST /api/auth/verify-otp
+// @desc    Verify OTP and login/register
+// @access  Public
+router.post('/verify-otp', strictAuthLimiter, authCtrl.verifyOtp);
+
 // @route   POST /api/auth/login
 // @desc    Login with phone/email + password
 // @access  Public
