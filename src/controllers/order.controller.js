@@ -65,7 +65,7 @@ exports.getMyOrders = async (req, res) => {
 
         const [orders, total] = await Promise.all([
             Order.find({ buyerId: req.user.id })
-                .populate('listingId')
+                .populate('listingId', 'productName price photos category')
                 .populate('sellerId', 'name phone profilePicture district')
                 .sort({ createdAt: -1 })
                 .skip(skip)
@@ -99,7 +99,7 @@ exports.getIncomingOrders = async (req, res) => {
 
         const [orders, total] = await Promise.all([
             Order.find({ sellerId: req.user.id })
-                .populate('listingId')
+                .populate('listingId', 'productName price photos category')
                 .populate('buyerId', 'name phone profilePicture district')
                 .sort({ createdAt: -1 })
                 .skip(skip)
@@ -129,9 +129,10 @@ exports.getIncomingOrders = async (req, res) => {
 exports.getOrderDetails = async (req, res) => {
     try {
         const order = await Order.findById(req.params.id)
-            .populate('listingId')
+            .populate('listingId', 'productName price photos category description')
             .populate('buyerId', 'name phone district')
-            .populate('sellerId', 'name phone district');
+            .populate('sellerId', 'name phone district')
+            .lean();
 
         if (!order) {
             return res.status(404).json({ msg: 'Order not found' });

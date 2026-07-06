@@ -30,7 +30,7 @@ exports.getDashboard = async (req, res) => {
  */
 exports.getPosts = async (req, res) => {
     try {
-        const posts = await BuyingPost.find({ traderId: req.user._id }).sort({ createdAt: -1 });
+        const posts = await BuyingPost.find({ traderId: req.user._id }).sort({ createdAt: -1 }).lean();
         res.json(posts);
     } catch (err) {
         res.status(500).json({ msg: 'Server error' });

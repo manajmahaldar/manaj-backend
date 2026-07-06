@@ -1,6 +1,8 @@
 const express    = require('express');
 const router     = express.Router();
 const rateLimit  = require('express-rate-limit');
+const RedisStore = require('rate-limit-redis').default;
+const { client: redisClient, isConnected } = require('../config/redisClient');
 const { body }   = require('express-validator');
 const authCtrl   = require('../controllers/auth.controller');
 const { auth }   = require('../middleware/auth.middleware');
@@ -8,10 +10,22 @@ const { handleValidationErrors } = require('../middleware/validate.middleware');
 
 // ── Rate limiters ─────────────────────────────────────────────────────────────
 
+// Helper to create store conditionally
+const getRedisStore = (prefix) => {
+    if (isConnected()) {
+        return new RedisStore({
+            sendCommand: (...args) => redisClient.sendCommand(args),
+            prefix: prefix
+        });
+    }
+    return undefined; // fallback to memory
+};
+
 // Increased: 100 attempts per 1 min per IP for login / register
 const strictAuthLimiter = rateLimit({
     windowMs:       1 * 60 * 1000,
     max:            100,
+    store:          getRedisStore('rl:auth:'),
     standardHeaders: true,
     legacyHeaders:  false,
     message: { msg: 'Too many attempts. Please try again in 1 minute.' }
@@ -21,6 +35,7 @@ const strictAuthLimiter = rateLimit({
 const passwordLimiter = rateLimit({
     windowMs:       1 * 60 * 1000,
     max:            50,
+    store:          getRedisStore('rl:pw:'),
     standardHeaders: true,
     legacyHeaders:  false,
     message: { msg: 'Too many password reset requests. Please try again later.' }
@@ -30,6 +45,7 @@ const passwordLimiter = rateLimit({
 const refreshLimiter = rateLimit({
     windowMs:       1 * 60 * 1000,
     max:            500,
+    store:          getRedisStore('rl:refresh:'),
     standardHeaders: true,
     legacyHeaders:  false,
     message: { msg: 'Too many token refresh requests.' }

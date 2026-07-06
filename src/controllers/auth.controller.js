@@ -203,9 +203,20 @@ exports.register = async (req, res) => {
 };
 
 // ── Mock OTP Flow ─────────────────────────────────────────────────────────────
+const { client: redisClient } = require('../config/redisClient');
+
 exports.sendOtp = async (req, res) => {
     const { mobile } = req.body;
     if (!mobile) return res.status(400).json({ msg: 'Mobile number is required' });
+    
+    const otp = '1234'; // Mock OTP
+    try {
+        if (redisClient && redisClient.isReady) {
+            await redisClient.setEx(`otp:${mobile}`, 300, otp); // 5 mins TTL
+        }
+    } catch (err) {
+        console.error('Redis OTP Error:', err);
+    }
     
     // In a real app, integrate SMS gateway (Twilio, MSG91, AWS SNS, etc.)
     logger.info(`[Mock OTP] Sent OTP '1234' to ${mobile}`);
@@ -216,8 +227,18 @@ exports.verifyOtp = async (req, res) => {
     const { mobile, otp } = req.body;
     if (!mobile || !otp) return res.status(400).json({ msg: 'Mobile and OTP are required' });
 
-    // Mock verification: accept '1234' for any number
-    if (otp !== '1234') {
+    let isValid = false;
+    try {
+        if (redisClient && redisClient.isReady) {
+            const cachedOtp = await redisClient.get(`otp:${mobile}`);
+            if (cachedOtp === otp) isValid = true;
+        }
+    } catch (err) {
+        console.error('Redis OTP Error:', err);
+    }
+
+    // Fallback to mock verification if Redis fails or for hardcoded test
+    if (!isValid && otp !== '1234') {
         return res.status(400).json({ msg: 'Invalid OTP' });
     }
 

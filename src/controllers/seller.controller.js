@@ -30,7 +30,7 @@ exports.getDashboard = async (req, res) => {
  */
 exports.getListings = async (req, res) => {
     try {
-        const listings = await Listing.find({ sellerId: req.user._id }).sort({ createdAt: -1 });
+        const listings = await Listing.find({ sellerId: req.user._id }).sort({ createdAt: -1 }).lean();
         res.json(listings);
     } catch (err) {
         res.status(500).json({ msg: 'Server error' });

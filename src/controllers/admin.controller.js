@@ -17,7 +17,7 @@ exports.getDashboardStats = async (req, res) => {
         const pendingDeliveries = await Order.countDocuments({ status: { $in: ['confirmed', 'packed', 'out-for-delivery'] } });
         
         // Calculate total sales
-        const completedOrders = await Order.find({ status: 'delivered' });
+        const completedOrders = await Order.find({ status: 'delivered' }).lean();
         const totalSales = completedOrders.reduce((acc, curr) => acc + parseFloat(curr.totalAmount || 0), 0);
 
         const pendingApprovals = await Listing.countDocuments({ status: 'pending' }) + 
@@ -93,7 +93,7 @@ exports.assignDeliveryPartner = async (req, res) => {
 // @desc    Get list of all delivery partners
 exports.getDeliveryPartners = async (req, res) => {
     try {
-        const partners = await User.find({ role: 'delivery_partner', accountStatus: 'active' }).select('name phone');
+        const partners = await User.find({ role: 'delivery_partner', accountStatus: 'active' }).select('name phone').lean();
         res.json(partners);
     } catch (err) {
         res.status(500).send('Server error');

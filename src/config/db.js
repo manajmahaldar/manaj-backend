@@ -83,7 +83,13 @@ const seedAdminIfNeeded = async () => {
 
 const connectDB = async () => {
     try {
-        const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/fish-marketplace', { family: 4 });
+        const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/fish-marketplace', { 
+            family: 4,
+            maxPoolSize: 100, // Enterprise scale connection pooling
+            minPoolSize: 10,  // Keep some connections alive
+            serverSelectionTimeoutMS: 5000,
+            socketTimeoutMS: 45000 // Close idle sockets after 45s
+        });
         console.log(`Connected to MongoDB: ${conn.connection.host}`);
         await seedAdminIfNeeded();
     } catch (err) {

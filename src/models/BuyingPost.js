@@ -29,8 +29,8 @@ const buyingPostSchema = new mongoose.Schema({
 });
 
 // Indexes for scalability
-buyingPostSchema.index({ district: 1, category: 1, status: 1 });
-buyingPostSchema.index({ traderId: 1 });
+buyingPostSchema.index({ status: 1, district: 1, category: 1, createdAt: -1 }); // Optimized feed query
+buyingPostSchema.index({ traderId: 1, createdAt: -1 }); // Optimized user posts query
 buyingPostSchema.index({ createdAt: -1 });
 buyingPostSchema.index({ status: 1 });
 

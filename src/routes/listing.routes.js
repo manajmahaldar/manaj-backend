@@ -28,7 +28,7 @@ router.get('/my-listings', auth, listingController.getMyListings);
 
 // @route   GET api/listings/:id
 // @desc    Get single listing
-router.get('/:id', listingController.getListingById);
+router.get('/:id', cache(1800), listingController.getListingById);
 
 // @route   PUT api/listings/:id/status
 // @desc    Approve/Reject listing (Admin only)

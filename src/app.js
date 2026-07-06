@@ -27,10 +27,24 @@ const collectDefaultMetrics = client.collectDefaultMetrics;
 collectDefaultMetrics({ prefix: 'monaj_core_' });
 
 // --- Rate Limiters ---
+const RedisStore = require('rate-limit-redis').default;
+const { client: redisClient, isConnected } = require('./config/redisClient');
+
+const getRedisStore = (prefix) => {
+    if (isConnected()) {
+        return new RedisStore({
+            sendCommand: (...args) => redisClient.sendCommand(args),
+            prefix: prefix
+        });
+    }
+    return undefined; // fallback to memory
+};
+
 // General API limiter: Increased for dev/testing
 const apiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
   max: 1000,
+  store: getRedisStore('rl:api:'),
   standardHeaders: true,
   legacyHeaders: false,
   message: { msg: 'Too many requests. Please try again in a minute.' },
@@ -40,6 +54,7 @@ const apiLimiter = rateLimit({
 const authLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
   max: 500,
+  store: getRedisStore('rl:global_auth:'),
   standardHeaders: true,
   legacyHeaders: false,
   message: { msg: 'Too many login/register attempts. Please try again in a minute.' },

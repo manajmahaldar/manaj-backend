@@ -32,8 +32,8 @@ const orderSchema = new mongoose.Schema({
 // Indexes for scalability
 orderSchema.index({ buyerId: 1, createdAt: -1 });
 orderSchema.index({ sellerId: 1, createdAt: -1 });
-orderSchema.index({ status: 1 });
-orderSchema.index({ deliveryBoyId: 1 });
+orderSchema.index({ status: 1, createdAt: -1 }); // Optimized admin/status queries
+orderSchema.index({ deliveryBoyId: 1, status: 1 }); // Optimized delivery tracking
 orderSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('Order', orderSchema);

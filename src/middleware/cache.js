@@ -24,7 +24,8 @@ const cache = (ttl = 3600) => {
             const cachedResponse = await client.get(key);
 
             if (cachedResponse) {
-                // If it exists, parse and return the cached data immediately
+                // If it exists, set headers and return immediately
+                res.set('Cache-Control', `public, max-age=${ttl}`);
                 return res.json(JSON.parse(cachedResponse));
             } else {
                 // If not, we override res.json to intercept the response and cache it
@@ -33,6 +34,8 @@ const cache = (ttl = 3600) => {
                 res.json = (body) => {
                     // Cache the successful response
                     client.setEx(key, ttl, JSON.stringify(body));
+                    // Set Cache-Control header
+                    res.set('Cache-Control', `public, max-age=${ttl}`);
                     // Send it using the original res.json
                     return originalJson(body);
                 };

@@ -36,9 +36,9 @@ const listingSchema = new mongoose.Schema({
 });
 
 // Indexes for scalability — prevents full collection scans on common queries
-listingSchema.index({ district: 1, category: 1, status: 1 }); // Main filter combo
-listingSchema.index({ sellerId: 1 }); // My listings queries
-listingSchema.index({ createdAt: -1 }); // Sorting by newest
+listingSchema.index({ status: 1, district: 1, category: 1, createdAt: -1 }); // Optimized for main feed filter & sort
+listingSchema.index({ sellerId: 1, createdAt: -1 }); // My listings queries
+listingSchema.index({ createdAt: -1 }); // Fallback sorting by newest
 listingSchema.index({ status: 1 }); // Admin approval queries
 
 module.exports = mongoose.model('Listing', listingSchema);

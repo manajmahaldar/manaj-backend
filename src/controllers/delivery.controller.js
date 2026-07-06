@@ -6,7 +6,8 @@ exports.getAssignedOrders = async (req, res) => {
         const orders = await Order.find({ deliveryBoyId: req.user.id })
             .populate('buyerId', 'name phone district')
             .populate('listingId', 'productName photos')
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .lean();
         res.json(orders);
     } catch (err) {
         res.status(500).send('Server error');
