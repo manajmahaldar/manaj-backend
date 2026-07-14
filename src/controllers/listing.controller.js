@@ -77,31 +77,36 @@ exports.getListings = async (req, res) => {
         let query = { status: 'approved' };
         
         if (category) {
-            query.category = { $in: category.split(',') };
+            query.category = { $in: String(category).split(',') };
         }
         if (district) {
-            query.district = district;
+            query.district = String(district);
         }
         if (sellerRole) {
-            const usersWithRole = await User.find({ role: sellerRole }).select('_id').lean();
+            const usersWithRole = await User.find({ role: String(sellerRole) }).select('_id').lean();
             const userIds = usersWithRole.map(u => u._id);
             query.sellerId = { $in: userIds };
         }
         if (search) {
+            const searchStr = String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // escape regex
             query.$or = [
-                { productName: { $regex: search, $options: 'i' } },
-                { district: { $regex: search, $options: 'i' } }
+                { productName: { $regex: searchStr, $options: 'i' } },
+                { district: { $regex: searchStr, $options: 'i' } }
             ];
         }
 
-        const skip = (page - 1) * limit;
+        const pageNumber = Number.parseInt(page, 10);
+        const limitNumber = Number.parseInt(limit, 10);
+        const safePage = Number.isFinite(pageNumber) && pageNumber > 0 ? pageNumber : 1;
+        const safeLimit = Number.isFinite(limitNumber) && limitNumber > 0 ? limitNumber : 12;
+        const skip = (safePage - 1) * safeLimit;
 
         const [listings, total] = await Promise.all([
             Listing.find(query)
                 .populate('sellerId', 'name district localDistrict policeStation verifiedStatus role profilePicture')
                 .sort({ createdAt: -1 })
                 .skip(skip)
-                .limit(parseInt(limit))
+                .limit(safeLimit)
                 .lean(), // Performance: Reduce overhead by returning plain JS objects
             Listing.countDocuments(query)
         ]);
@@ -110,8 +115,8 @@ exports.getListings = async (req, res) => {
             listings,
             pagination: {
                 total,
-                page: parseInt(page),
-                pages: Math.ceil(total / limit)
+                page: safePage,
+                pages: Math.ceil(total / safeLimit)
             }
         });
     } catch (err) {

@@ -35,7 +35,7 @@ exports.createPost = async (req, res) => {
         res.json(newPost);
     } catch (err) {
         console.error('Error creating post:', err);
-        res.status(500).send('Server error');
+        console.error(err); res.status(500).send('Server error');
     }
 };
 
@@ -45,7 +45,7 @@ exports.getMyPosts = async (req, res) => {
         const posts = await BuyingPost.find({ traderId: req.user.id }).sort({ createdAt: -1 }).lean();
         res.json(posts);
     } catch (err) {
-        res.status(500).send('Server error');
+        console.error(err); res.status(500).send('Server error');
     }
 };
 
@@ -75,6 +75,10 @@ exports.updatePost = async (req, res) => {
         clearCache('/api/posts');
         res.json(post);
     } catch (err) {
+        console.error('Error creating post:', err);
+        if (err.http_code === 401 || err.http_code === 400 || (err.message && err.message.includes('api_key'))) {
+            return res.status(500).json({ msg: 'Image upload failed: Invalid Cloudinary API Key or Configuration. Please check your backend .env file.' });
+        }
         res.status(500).send('Server error');
     }
 };
@@ -89,7 +93,7 @@ exports.deletePost = async (req, res) => {
         clearCache('/api/posts');
         res.json({ msg: 'Post removed' });
     } catch (err) {
-        res.status(500).send('Server error');
+        console.error(err); res.status(500).send('Server error');
     }
 };
 
@@ -98,23 +102,28 @@ exports.getAllPosts = async (req, res) => {
         const { category, district, search, page = 1, limit = 12 } = req.query;
         let query = { status: 'approved' };
         
-        if (category) query.category = category.toLowerCase();
-        if (district) query.district = district;
+        if (category) query.category = String(category).toLowerCase();
+        if (district) query.district = String(district);
         if (search) {
+            const searchStr = String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // escape regex
             query.$or = [
-                { fishName: { $regex: search, $options: 'i' } },
-                { district: { $regex: search, $options: 'i' } }
+                { fishName: { $regex: searchStr, $options: 'i' } },
+                { district: { $regex: searchStr, $options: 'i' } }
             ];
         }
 
-        const skip = (page - 1) * limit;
+        const pageNumber = Number.parseInt(page, 10);
+        const limitNumber = Number.parseInt(limit, 10);
+        const safePage = Number.isFinite(pageNumber) && pageNumber > 0 ? pageNumber : 1;
+        const safeLimit = Number.isFinite(limitNumber) && limitNumber > 0 ? limitNumber : 12;
+        const skip = (safePage - 1) * safeLimit;
 
         const [posts, total] = await Promise.all([
             BuyingPost.find(query)
                 .populate('traderId', 'name district verifiedStatus role profilePicture') // Sanitize: Only public fields
                 .sort({ createdAt: -1 })
                 .skip(skip)
-                .limit(parseInt(limit))
+                .limit(safeLimit)
                 .lean(),
             BuyingPost.countDocuments(query)
         ]);
@@ -123,12 +132,12 @@ exports.getAllPosts = async (req, res) => {
             posts,
             pagination: {
                 total,
-                page: parseInt(page),
-                pages: Math.ceil(total / limit)
+                page: safePage,
+                pages: Math.ceil(total / safeLimit)
             }
         });
     } catch (err) {
-        res.status(500).send('Server error');
+        console.error(err); res.status(500).send('Server error');
     }
 };
 
@@ -140,7 +149,7 @@ exports.updatePostStatus = async (req, res) => {
         clearCache('/api/posts');
         res.json(post);
     } catch (err) {
-        res.status(500).send('Server error');
+        console.error(err); res.status(500).send('Server error');
     }
 };
 
@@ -153,6 +162,6 @@ exports.getPostById = async (req, res) => {
         res.json(post);
     } catch (err) {
         console.error('Error in getPostById:', err);
-        res.status(500).send('Server error');
+        console.error(err); res.status(500).send('Server error');
     }
 };
