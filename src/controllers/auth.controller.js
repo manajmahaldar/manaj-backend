@@ -475,9 +475,15 @@ exports.logout = async (req, res) => {
 exports.googleLogin = async (req, res) => {
     const { token, role, district, isRegistration } = req.body;
     try {
+        const audiences = [
+            GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_ANDROID_CLIENT_ID,
+            process.env.GOOGLE_IOS_CLIENT_ID
+        ].filter(Boolean);
+
         const ticket = await googleClient.verifyIdToken({
             idToken:  token,
-            audience: GOOGLE_CLIENT_ID
+            audience: audiences
         });
         const { sub: googleId, email, name, picture } = ticket.getPayload();
         const normalizedEmail = email ? email.toLowerCase().trim() : undefined;

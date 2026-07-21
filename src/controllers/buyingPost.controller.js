@@ -6,7 +6,7 @@ const FraudService = require('../services/FraudService');
 exports.createPost = async (req, res) => {
     try {
 
-        const { category, fishName, size, requiredQuantity, buyingPrice, district, phoneNumber } = req.body;
+        const { category, fishName, size, requiredQuantity, buyingPrice, district, localDistrict, phoneNumber } = req.body;
         const photos = req.files && req.files.length > 0
             ? await Promise.all(req.files.map(file => uploadToCloudinary(file.buffer).then(r => r.secure_url)))
             : [];
@@ -23,6 +23,7 @@ exports.createPost = async (req, res) => {
             requiredQuantity,
             buyingPrice,
             district,
+            localDistrict,
             phoneNumber,
             photos,
             isFlagged: fraudResult.isFlagged,
@@ -51,7 +52,7 @@ exports.getMyPosts = async (req, res) => {
 
 exports.updatePost = async (req, res) => {
     try {
-        const { category, fishName, size, requiredQuantity, buyingPrice, district, phoneNumber } = req.body;
+        const { category, fishName, size, requiredQuantity, buyingPrice, district, localDistrict, phoneNumber } = req.body;
         
         // IDOR PREVENTION: Check ownership in the query
         let post = await BuyingPost.findOne({ _id: req.params.id, traderId: req.user.id });
@@ -59,7 +60,7 @@ exports.updatePost = async (req, res) => {
             return res.status(404).json({ msg: 'Post not found or unauthorized' });
         }
 
-        let updateFields = { category, fishName, size, requiredQuantity, buyingPrice, district, phoneNumber };
+        let updateFields = { category, fishName, size, requiredQuantity, buyingPrice, district, localDistrict, phoneNumber };
         if (req.files && req.files.length > 0) {
             updateFields.photos = await Promise.all(
                 req.files.map(file => uploadToCloudinary(file.buffer).then(r => r.secure_url))

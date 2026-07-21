@@ -8,7 +8,7 @@ const { cache } = require('../middleware/cache');
 
 // @route   POST api/listings
 // @desc    Create a listing
-router.post('/', auth, isVerified, authorizeRoles('seller', 'farmer', 'hatchery'), (req, res, next) => {
+router.post('/', auth, isVerified, authorizeRoles('seller', 'farmer', 'hatchery', 'trader'), (req, res, next) => {
     upload.array('photos', 3)(req, res, (err) => {
         if (err) {
             console.error('Multer/Cloudinary Error:', err);
@@ -36,7 +36,7 @@ router.put('/:id/status', auth, admin, listingController.updateListingStatus);
 
 // @route   PUT api/listings/:id
 // @desc    Update a listing
-router.put('/:id', auth, isVerified, authorizeRoles('seller', 'farmer', 'hatchery'), (req, res, next) => {
+router.put('/:id', auth, isVerified, authorizeRoles('seller', 'farmer', 'hatchery', 'trader'), (req, res, next) => {
     upload.array('photos', 3)(req, res, (err) => {
         if (err) {
             console.error('Multer/Cloudinary Error:', err);
@@ -48,6 +48,6 @@ router.put('/:id', auth, isVerified, authorizeRoles('seller', 'farmer', 'hatcher
 
 // @route   DELETE api/listings/:id
 // @desc    Delete a listing
-router.delete('/:id', auth, authorizeRoles('seller', 'farmer', 'hatchery'), listingController.deleteListing);
+router.delete('/:id', auth, authorizeRoles('seller', 'farmer', 'hatchery', 'trader'), listingController.deleteListing);
 
 module.exports = router;

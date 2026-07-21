@@ -1,5 +1,6 @@
 const BuyingPost = require('../models/BuyingPost');
 const Order = require('../models/Order');
+const Listing = require('../models/Listing');
 
 /**
  * GET /api/trader/dashboard
@@ -8,16 +9,17 @@ const Order = require('../models/Order');
 exports.getDashboard = async (req, res) => {
     try {
         const traderId = req.user._id;
-        const [totalPosts, pendingPosts, approvedPosts, sentOrders] = await Promise.all([
+        const [totalPosts, pendingPosts, approvedPosts, sentOrders, totalListings] = await Promise.all([
             BuyingPost.countDocuments({ traderId: traderId }),
             BuyingPost.countDocuments({ traderId: traderId, status: 'pending' }),
             BuyingPost.countDocuments({ traderId: traderId, status: 'approved' }),
             Order.countDocuments({ buyerId: traderId }),
+            Listing.countDocuments({ userId: traderId }),
         ]);
 
         res.json({
             role: 'trader',
-            stats: { totalPosts, pendingPosts, approvedPosts, sentOrders }
+            stats: { totalPosts, pendingPosts, approvedPosts, sentOrders, totalListings }
         });
     } catch (err) {
         console.error('Trader dashboard error:', err);

@@ -7,6 +7,7 @@ const buyingPostSchema = new mongoose.Schema({
     requiredQuantity: { type: String, required: true },
     buyingPrice: { type: String, required: true },
     district: { type: String, required: true },
+    localDistrict: { type: String, default: '' },
     phoneNumber: { type: String, required: true },
     category: { 
         type: String, 
