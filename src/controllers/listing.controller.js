@@ -23,18 +23,9 @@ exports.createListing = async (req, res) => {
             }
         }
 
-        // Role-based category validation
-        if (req.user.role === 'seller' && !['Feed', 'Medicine'].includes(category)) {
-            return res.status(403).json({ msg: 'Sellers can only post Feed or Medicine' });
-        }
-        if (req.user.role === 'farmer' && category !== 'Fingerling') {
-            return res.status(403).json({ msg: 'Farmers can only post Chara Pona (Fingerling)' });
-        }
-        if (req.user.role === 'hatchery' && !['Spawn', 'Fingerling'].includes(category)) {
-            return res.status(403).json({ msg: 'Hatcheries can only post Spawn (Renu) or Fingerling (Chara)' });
-        }
+        // Only admins cannot list
         if (req.user.role === 'admin') {
-            return res.status(403).json({ msg: 'Main Admin cannot list products' });
+            return res.status(403).json({ msg: 'Admin cannot list products' });
         }
 
         const fraudResult = await FraudService.detectListingSpam(req.user.id, {
@@ -163,18 +154,9 @@ exports.updateListing = async (req, res) => {
     try {
         const { productName, category, price, district, localDistrict, policeStation, description, phoneNumber, quantity, unit } = req.body;
         
-        // Role-based category validation
-        if (req.user.role === 'seller' && !['Feed', 'Medicine'].includes(category)) {
-            return res.status(403).json({ msg: 'Sellers can only post Feed or Medicine' });
-        }
-        if (req.user.role === 'farmer' && category !== 'Fingerling') {
-            return res.status(403).json({ msg: 'Farmers can only post Chara Pona (Fingerling)' });
-        }
-        if (req.user.role === 'hatchery' && !['Spawn', 'Fingerling'].includes(category)) {
-            return res.status(403).json({ msg: 'Hatcheries can only post Spawn (Renu) or Fingerling (Chara)' });
-        }
+        // Only admins cannot list
         if (req.user.role === 'admin') {
-            return res.status(403).json({ msg: 'Main Admin cannot list products' });
+            return res.status(403).json({ msg: 'Admin cannot list products' });
         }
         
         let updateFields = {
