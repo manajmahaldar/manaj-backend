@@ -129,6 +129,37 @@ exports.getListingById = async (req, res) => {
     }
 };
 
+exports.getHomeSummary = async (req, res) => {
+    try {
+        const [fishListings, feedMedicineListings, buyingPosts] = await Promise.all([
+            Listing.find({ status: 'approved', category: { $in: ['Fish', 'Spawn/Seed', 'মাছ', 'পোনা'] } })
+                .populate('sellerId', 'name district localDistrict policeStation verifiedStatus role profilePicture')
+                .sort({ createdAt: -1 })
+                .limit(8)
+                .lean(),
+            Listing.find({ status: 'approved', category: { $in: ['Feed', 'Medicine', 'ফিড', 'ওষুধ'] } })
+                .populate('sellerId', 'name district localDistrict policeStation verifiedStatus role profilePicture')
+                .sort({ createdAt: -1 })
+                .limit(8)
+                .lean(),
+            require('../models/BuyingPost').find({ status: 'approved' })
+                .populate('traderId', 'name district verifiedStatus role profilePicture')
+                .sort({ createdAt: -1 })
+                .limit(8)
+                .lean()
+        ]);
+
+        res.json({
+            fishListings,
+            feedMedicineListings,
+            buyingPosts
+        });
+    } catch (err) {
+        console.error('Error in getHomeSummary:', err);
+        res.status(500).send('Server error');
+    }
+};
+
 exports.updateListingStatus = async (req, res) => {
     try {
         const { status } = req.body;

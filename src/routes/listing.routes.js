@@ -18,6 +18,10 @@ router.post('/', auth, isVerified, authorizeRoles('seller', 'farmer', 'hatchery'
     });
 }, listingController.createListing);
 
+// @route   GET api/listings/home-summary
+// @desc    Get aggregated listings and posts for the home page in a single query
+router.get('/home-summary', cache(1800), listingController.getHomeSummary);
+
 // @route   GET api/listings
 // @desc    Get all approved listings
 router.get('/', cache(3600), listingController.getListings);

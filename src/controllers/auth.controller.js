@@ -130,14 +130,14 @@ exports.register = async (req, res) => {
 
         // — Duplicate Check —
         if (normalizedEmail) {
-            const emailExists = await User.findOne({ email: normalizedEmail });
+            const emailExists = await User.findOne({ email: normalizedEmail }).lean();
             if (emailExists) {
                 return res.status(400).json({ msg: 'An account with this email already exists.' });
             }
         }
 
         if (normalizedPhone) {
-            const phoneExists = await User.findOne({ phone: normalizedPhone });
+            const phoneExists = await User.findOne({ phone: normalizedPhone }).lean();
             if (phoneExists) {
                 return res.status(400).json({ msg: 'An account with this phone number already exists.' });
             }

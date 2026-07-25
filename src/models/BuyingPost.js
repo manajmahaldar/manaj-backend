@@ -34,5 +34,6 @@ buyingPostSchema.index({ status: 1, district: 1, category: 1, createdAt: -1 }); 
 buyingPostSchema.index({ traderId: 1, createdAt: -1 }); // Optimized user posts query
 buyingPostSchema.index({ createdAt: -1 });
 buyingPostSchema.index({ status: 1 });
+buyingPostSchema.index({ fishName: 'text', district: 'text' });
 
 module.exports = mongoose.model('BuyingPost', buyingPostSchema);

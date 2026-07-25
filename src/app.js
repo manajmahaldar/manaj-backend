@@ -69,7 +69,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "https://accounts.google.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "https://res.cloudinary.com", "https://lh3.googleusercontent.com"],
-      connectSrc: ["'self'", "https://monaj-frontend.vercel.app", "https://manaj-backend.onrender.com", "https://accounts.google.com"],
+      connectSrc: ["'self'", "https://monaj-frontend.vercel.app", "https://manaj-backend.onrender.com", "https://accounts.google.com", "https://www.matsyalink.com"],
       frameSrc: ["'self'", "https://accounts.google.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],
@@ -82,7 +82,17 @@ app.use(helmet({
     preload: true,
   },
   referrerPolicy: { policy: "no-referrer" },
+  frameguard: { action: 'deny' }, // prevent Clickjacking
+  noSniff: true, // enforce X-Content-Type-Options: nosniff
 }));
+
+// Extra HTTP Security Headers
+app.use((_req, res, next) => {
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  next();
+});
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(',') 
@@ -90,15 +100,13 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl)
+    // Local development verification
     if (!origin) return callback(null, true);
     
-    // Always allow local development origins regardless of port
     if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
       return callback(null, true);
     }
     
-    // Normalize origin by removing trailing slash for strict matching
     const normalizedOrigin = origin.replace(/\/$/, '');
     if (allowedOrigins.indexOf(normalizedOrigin) !== -1) {
       callback(null, true);
@@ -151,8 +159,6 @@ const sanitizeObj = (obj) => {
 app.use((req, _res, next) => {
   if (req.body) sanitizeObj(req.body);
   if (req.params) sanitizeObj(req.params);
-  // Do NOT mutate req.query (read-only in Express v5). Query params are
-  // sanitized at controller level or validated via schema.
   next();
 });
 
@@ -187,6 +193,8 @@ app.use('/api/orders', require('./routes/order.routes.js'));
 app.use('/api/admin', require('./routes/admin.routes.js'));
 app.use('/api/admin/media', require('./routes/media.routes.js'));
 app.use('/api/knowledge', require('./routes/knowledge.routes.js'));
+app.use('/api/learning', require('./routes/learning/index.js'));
+app.use('/api/legal', require('./routes/legal.routes.js'));
 
 // Public hero settings endpoint
 const { getHeroSettings } = require('./controllers/media.controller');

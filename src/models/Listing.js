@@ -40,5 +40,6 @@ listingSchema.index({ status: 1, district: 1, category: 1, createdAt: -1 }); // 
 listingSchema.index({ sellerId: 1, createdAt: -1 }); // My listings queries
 listingSchema.index({ createdAt: -1 }); // Fallback sorting by newest
 listingSchema.index({ status: 1 }); // Admin approval queries
+listingSchema.index({ productName: 'text', description: 'text', district: 'text' }); // Text search index
 
 module.exports = mongoose.model('Listing', listingSchema);
