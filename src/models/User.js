@@ -28,7 +28,7 @@ const userSchema = new mongoose.Schema({
     // --- Verification ---
     verifiedStatus:             { type: Boolean, default: false },
     isVerified:                 { type: Boolean, default: false },
-    accountStatus:              { type: String, enum: ['active', 'suspended', 'pending'], default: 'pending' },
+    accountStatus:              { type: String, enum: ['active', 'suspended', 'pending'], default: 'active' },
     aadhaarCard:                { type: String, default: '' },
     verificationVideo:          { type: String, default: '' },
     verificationRejectedReason: { type: String, default: '' },

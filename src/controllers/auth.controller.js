@@ -96,9 +96,9 @@ exports.register = async (req, res) => {
     const { name, phone, email, password, district, localDistrict, policeStation, role } = req.body;
 
     // — Input validation —
-    if (!name || !password || !district) {
-        console.warn('Registration failed: Missing required fields (name, password, or district)');
-        return res.status(400).json({ msg: 'Name, password, and district are required.' });
+    if (!name || !password || !district || !localDistrict || !policeStation) {
+        console.warn('Registration failed: Missing required location fields (district, localDistrict, or policeStation)');
+        return res.status(400).json({ msg: 'Name, password, state, district, and police station are required.' });
     }
     if (!phone && !email) {
         console.warn('Registration failed: Neither phone nor email provided');
