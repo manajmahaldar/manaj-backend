@@ -8,6 +8,10 @@ exports.createListing = async (req, res) => {
     try {
         const { productName, category, price, district, localDistrict, policeStation, description, phoneNumber, quantity, unit } = req.body;
         
+        if (!productName || !price || !district) {
+            return res.status(400).json({ msg: 'Product Name, Price, and District are required.' });
+        }
+
         // Upload files to Cloudinary, separating photos and video
         const photos = [];
         let video = '';
@@ -28,37 +32,40 @@ exports.createListing = async (req, res) => {
             return res.status(403).json({ msg: 'Admin cannot list products' });
         }
 
+        const validCategory = ['Spawn', 'Fingerling', 'Feed', 'Medicine', 'Fish', 'Equipment', 'Fresh Fish', 'Prawns', 'Crabs', 'Dry Fish', 'Shellfish'].includes(category)
+            ? category
+            : 'Fish';
+
         const fraudResult = await FraudService.detectListingSpam(req.user.id, {
-            productName, category, description
+            productName, category: validCategory, description: description || productName
         }, 'Listing');
 
         const newListing = new Listing({
             sellerId: req.user.id,
             productName,
-            category,
-            price,
-            district,
-            localDistrict,
+            category: validCategory,
+            price: String(price),
+            district: district || 'West Bengal',
+            localDistrict: localDistrict || '',
             policeStation: policeStation || '',
-            description,
+            description: description || `Listing for ${productName}`,
             photos,
             video,
-            phoneNumber,
-            quantity,
-            unit,
+            phoneNumber: phoneNumber || req.user.phone || 'Not provided',
+            quantity: quantity || '1',
+            unit: unit || 'kg',
             status: 'pending', // All listings need review
             isFlagged: fraudResult.isFlagged,
             fraudReason: fraudResult.reason,
             fraudScore: fraudResult.fraudScore
         });
 
-
         await newListing.save();
         clearCache('/api/listings');
         res.json(newListing);
     } catch (err) {
         console.error('Error creating listing:', err);
-        res.status(500).send('Server error');
+        res.status(500).json({ msg: err.message || 'Server error creating listing' });
     }
 };
 

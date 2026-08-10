@@ -118,8 +118,8 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use(express.json({ limit: '10kb' }));
-app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // --------------------------------------------------------------------------
 // Custom XSS + NoSQL Injection sanitization (both xss-clean and
@@ -195,6 +195,9 @@ app.use('/api/admin/media', require('./routes/media.routes.js'));
 app.use('/api/knowledge', require('./routes/knowledge.routes.js'));
 app.use('/api/learning', require('./routes/learning/index.js'));
 app.use('/api/legal', require('./routes/legal.routes.js'));
+app.use('/api/ai', require('./routes/ai.routes.js'));
+app.use('/api/farming-ai', require('./routes/farmingAI.routes.js'));
+app.use('/api/admin/farming-ai', require('./routes/adminFarmingAI.routes.js'));
 
 // Public hero settings endpoint
 const { getHeroSettings } = require('./controllers/media.controller');
