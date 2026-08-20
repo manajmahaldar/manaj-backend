@@ -5,26 +5,57 @@ const FraudService = require('../services/FraudService');
 
 exports.createPost = async (req, res) => {
     try {
+        const {
+            category,
+            fishName,
+            // Fish-specific
+            size,
+            // Feed-specific
+            feedType,
+            // Medicine-specific
+            medicineType,
+            strength,
+            // Feed & Medicine shared
+            packingSize,
+            // Common
+            requiredQuantity,
+            buyingPrice,
+            district,
+            localDistrict,
+            policeStation,
+            phoneNumber,
+            additionalRequirement
+        } = req.body;
 
-        const { category, fishName, size, requiredQuantity, buyingPrice, district, localDistrict, phoneNumber } = req.body;
         const photos = req.files && req.files.length > 0
             ? await Promise.all(req.files.map(file => uploadToCloudinary(file.buffer).then(r => r.secure_url)))
             : [];
-        
+
         const fraudResult = await FraudService.detectListingSpam(req.user.id, {
             fishName, category
         }, 'BuyingPost');
 
         const newPost = new BuyingPost({
             traderId: req.user.id,
-            category,
+            category: category || 'fish',
             fishName,
-            size,
+            // Fish-specific
+            size: size || '',
+            // Feed-specific
+            feedType: feedType || '',
+            // Medicine-specific
+            medicineType: medicineType || '',
+            strength: strength || '',
+            // Feed & Medicine shared
+            packingSize: packingSize || '',
+            // Common
             requiredQuantity,
             buyingPrice,
             district,
-            localDistrict,
+            localDistrict: localDistrict || '',
+            policeStation: policeStation || '',
             phoneNumber,
+            additionalRequirement: additionalRequirement || '',
             photos,
             isFlagged: fraudResult.isFlagged,
             fraudReason: fraudResult.reason,
@@ -36,7 +67,7 @@ exports.createPost = async (req, res) => {
         res.json(newPost);
     } catch (err) {
         console.error('Error creating post:', err);
-        console.error(err); res.status(500).send('Server error');
+        res.status(500).send('Server error');
     }
 };
 
@@ -52,15 +83,46 @@ exports.getMyPosts = async (req, res) => {
 
 exports.updatePost = async (req, res) => {
     try {
-        const { category, fishName, size, requiredQuantity, buyingPrice, district, localDistrict, phoneNumber } = req.body;
-        
+        const {
+            category,
+            fishName,
+            size,
+            feedType,
+            medicineType,
+            strength,
+            packingSize,
+            requiredQuantity,
+            buyingPrice,
+            district,
+            localDistrict,
+            policeStation,
+            phoneNumber,
+            additionalRequirement
+        } = req.body;
+
         // IDOR PREVENTION: Check ownership in the query
         let post = await BuyingPost.findOne({ _id: req.params.id, traderId: req.user.id });
         if (!post) {
             return res.status(404).json({ msg: 'Post not found or unauthorized' });
         }
 
-        let updateFields = { category, fishName, size, requiredQuantity, buyingPrice, district, localDistrict, phoneNumber };
+        let updateFields = {
+            category,
+            fishName,
+            size: size || '',
+            feedType: feedType || '',
+            medicineType: medicineType || '',
+            strength: strength || '',
+            packingSize: packingSize || '',
+            requiredQuantity,
+            buyingPrice,
+            district,
+            localDistrict: localDistrict || '',
+            policeStation: policeStation || '',
+            phoneNumber,
+            additionalRequirement: additionalRequirement || ''
+        };
+
         if (req.files && req.files.length > 0) {
             updateFields.photos = await Promise.all(
                 req.files.map(file => uploadToCloudinary(file.buffer).then(r => r.secure_url))
@@ -76,7 +138,7 @@ exports.updatePost = async (req, res) => {
         clearCache('/api/posts');
         res.json(post);
     } catch (err) {
-        console.error('Error creating post:', err);
+        console.error('Error updating post:', err);
         if (err.http_code === 401 || err.http_code === 400 || (err.message && err.message.includes('api_key'))) {
             return res.status(500).json({ msg: 'Image upload failed: Invalid Cloudinary API Key or Configuration. Please check your backend .env file.' });
         }
@@ -102,7 +164,7 @@ exports.getAllPosts = async (req, res) => {
     try {
         const { category, district, search, page = 1, limit = 12 } = req.query;
         let query = { status: 'approved' };
-        
+
         if (category) query.category = String(category).toLowerCase();
         if (district) query.district = String(district);
         if (search) {
@@ -163,6 +225,6 @@ exports.getPostById = async (req, res) => {
         res.json(post);
     } catch (err) {
         console.error('Error in getPostById:', err);
-        console.error(err); res.status(500).send('Server error');
+        res.status(500).send('Server error');
     }
 };

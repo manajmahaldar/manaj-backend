@@ -8,11 +8,12 @@ const listingSchema = new mongoose.Schema({
         enum: ['Spawn', 'Fingerling', 'Feed', 'Medicine', 'Fish', 'Equipment', 'Fresh Fish', 'Prawns', 'Crabs', 'Dry Fish', 'Shellfish'], 
         required: true 
     },
-    quantity: { type: String }, // e.g. "50"
+    quantity: { type: String, required: true }, // e.g. "50"
     unit: { type: String }, // e.g. "kg", "gm", "piece"
     stock: { type: Number, default: 0 },
 
     price: { type: String, required: true },
+    mrp: { type: String, default: '' }, // Market Retail Price for discount display (optional)
     lastPriceUpdate: { type: Date, default: Date.now },
     district: { type: String, required: true },
     localDistrict: { type: String, default: '' },
@@ -31,6 +32,7 @@ const listingSchema = new mongoose.Schema({
     isFlagged:   { type: Boolean, default: false },
     fraudReason: { type: String, default: '' },
     fraudScore:  { type: Number, default: 0 },
+    rejectionReason: { type: String, default: '' },
 
     createdAt: { type: Date, default: Date.now }
 });

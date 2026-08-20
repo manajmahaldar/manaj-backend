@@ -137,36 +137,20 @@ router.get('/users', auth, admin, async (req, res) => {
 });
 
 // @route   GET api/admin/pending-users
-// @desc    Get users who submitted verification details (admin review queue)
+// @desc    Get users awaiting admin approval (admin review queue)
 router.get('/pending-users', auth, admin, async (req, res) => {
     try {
-        // Users who have submitted verification details (Aadhaar, Video, or Local District/Police Station)
-        const usersWithDocs = await User.find({ 
+        const pendingUsers = await User.find({ 
             accountStatus: 'pending',
-            role: { $ne: 'admin' },
-            $or: [
-                { aadhaarCard: { $exists: true, $nin: [null, ""] } },
-                { verificationVideo: { $exists: true, $nin: [null, ""] } },
-                { localDistrict: { $exists: true, $nin: [null, ""] } },
-                { policeStation: { $exists: true, $nin: [null, ""] } }
-            ]
+            role: { $ne: 'admin' }
         })
         .select('-password -refreshTokens -resetPasswordToken -resetPasswordExpires -failedLoginAttempts -lockUntil')
+        .sort({ createdAt: -1 })
         .lean();
 
-        // Count of users who registered but haven't filled out verification details yet
-        const pendingRegistrationsCount = await User.countDocuments({
-            accountStatus: 'pending',
-            role: { $ne: 'admin' },
-            aadhaarCard: { $in: [null, ""] },
-            verificationVideo: { $in: [null, ""] },
-            localDistrict: { $in: [null, ""] },
-            policeStation: { $in: [null, ""] }
-        });
-
         res.json({ 
-            users: usersWithDocs,
-            pendingRegistrationsCount
+            users: pendingUsers,
+            pendingRegistrationsCount: pendingUsers.length
         });
     } catch (err) {
         console.error('pending-users error:', err);
@@ -426,7 +410,8 @@ router.put('/listings/:id/approve', auth, admin, async (req, res) => {
 // @desc    Reject a listing (Admin only)
 router.put('/listings/:id/reject', auth, admin, async (req, res) => {
     try {
-        const listing = await Listing.findByIdAndUpdate(req.params.id, { status: 'rejected' }, { new: true });
+        const { reason } = req.body;
+        const listing = await Listing.findByIdAndUpdate(req.params.id, { status: 'rejected', rejectionReason: reason || '' }, { new: true });
         clearCache('/api/listings');
         res.json(listing);
     } catch (err) {
@@ -450,7 +435,8 @@ router.put('/posts/:id/approve', auth, admin, async (req, res) => {
 // @desc    Reject a buying post (Admin only)
 router.put('/posts/:id/reject', auth, admin, async (req, res) => {
     try {
-        const post = await BuyingPost.findByIdAndUpdate(req.params.id, { status: 'rejected' }, { new: true });
+        const { reason } = req.body;
+        const post = await BuyingPost.findByIdAndUpdate(req.params.id, { status: 'rejected', rejectionReason: reason || '' }, { new: true });
         clearCache('/api/posts');
         res.json(post);
     } catch (err) {

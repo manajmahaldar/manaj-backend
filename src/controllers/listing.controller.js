@@ -6,10 +6,10 @@ const FraudService = require('../services/FraudService');
 
 exports.createListing = async (req, res) => {
     try {
-        const { productName, category, price, district, localDistrict, policeStation, description, phoneNumber, quantity, unit } = req.body;
+        const { productName, category, price, mrp, district, localDistrict, policeStation, description, phoneNumber, quantity, unit } = req.body;
         
-        if (!productName || !price || !district) {
-            return res.status(400).json({ msg: 'Product Name, Price, and District are required.' });
+        if (!productName || !price || !district || (category !== 'Equipment' && !mrp)) {
+            return res.status(400).json({ msg: 'Product Name, Price, MRP, and District are required.' });
         }
 
         // Upload files to Cloudinary, separating photos and video
@@ -45,6 +45,7 @@ exports.createListing = async (req, res) => {
             productName,
             category: validCategory,
             price: String(price),
+            mrp: mrp ? String(mrp) : '',
             district: district || 'West Bengal',
             localDistrict: localDistrict || '',
             policeStation: policeStation || '',
@@ -190,7 +191,7 @@ exports.getMyListings = async (req, res) => {
 
 exports.updateListing = async (req, res) => {
     try {
-        const { productName, category, price, district, localDistrict, policeStation, description, phoneNumber, quantity, unit } = req.body;
+        const { productName, category, price, mrp, district, localDistrict, policeStation, description, phoneNumber, quantity, unit } = req.body;
         
         // Only admins cannot list
         if (req.user.role === 'admin') {
@@ -201,6 +202,7 @@ exports.updateListing = async (req, res) => {
             productName,
             category,
             price,
+            mrp: mrp !== undefined ? String(mrp) : '',
             district,
             localDistrict,
             policeStation,

@@ -55,7 +55,8 @@ exports.handleFarmingAIChat = async (req, res) => {
             imageUrls,
             farmContext: conversation.farmContext || {},
             conversationHistory: conversation.messages,
-            userRole
+            userRole,
+            language: req.body.language || 'en'
         });
 
         // 4. Add assistant response to conversation history

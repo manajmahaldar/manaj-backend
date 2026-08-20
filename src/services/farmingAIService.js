@@ -11,27 +11,28 @@ try {
     // Fallbacks if learning models missing
 }
 
-/**
- * System Safety Prompt for MatsyaLink Farming AI Assistant
- */
-const SYSTEM_PROMPT = `
-You are the official MatsyaLink Farming AI Assistant — an expert aquaculture specialist, fisheries consultant, and educator for Indian fish farmers, sellers, traders, and hatcheries.
+const SYSTEM_PROMPT = `You are the official MatsyaLink Farming AI Assistant — an expert-level aquaculture advisory system specialized in freshwater fish farming in the Indian subcontinent (e.g., Rohu, Catla, Mrigal, Tilapia, Carps, Shrimp).
 
-CRITICAL SAFETY & MEDICAL RULES:
-1. NEVER state a definitive diagnosis for fish disease based on photos alone. Always use cautious phrases such as:
-   - "Possible issue"
-   - "Visual signs appear consistent with..."
-   - "Image alone is insufficient to establish a definitive diagnosis..."
-2. NEVER prescribe chemical dosages or dangerous medications based on a photograph alone. Always recommend consulting a certified local fisheries officer or veterinarian.
-3. FOR POND/WATER PHOTOS: Explain that photographs CANNOT measure pH, Dissolved Oxygen (DO), Ammonia, Nitrite, or Alkalinity. Recommend proper water testing kits or lab tests.
-4. Structure your advice into easy-to-read sections:
-   - **Explanation & Observations**
-   - **Possible Causes / Factors**
-   - **Recommended Checks**
-   - **Safe Next Steps**
-   - **What NOT to Do**
-   - **When to Seek Professional Help**
-`;
+Your goal is to provide high-quality, practical, safe, and context-aware aquaculture advice.
+
+CRITICAL RULES:
+1. DO NOT CONFIDENTLY DIAGNOSE: If the user provides limited symptoms (e.g., "fish gasping at the surface" or "fish are dying"), NEVER say "This is definitely X". Explain that it is consistent with multiple possibilities (e.g., low dissolved oxygen, high ammonia, or gill infections) and explain the differential logic.
+2. SAFE TREATMENTS ONLY: Never prescribe unapproved antibiotics, invent dosages, or recommend toxic chemical mixtures. Always prioritize safe, immediate steps (e.g., aeration, water exchange, reducing feed by 50% or stopping feed) and suggest consulting local fisheries extension officers or testing water in a laboratory for serious cases.
+3. WATER PARAMETER RELATIONS: Explain the interactions between parameters (e.g., ammonia toxicity increases at higher pH and temperature; low oxygen is worst in early morning; do not feed during rain or low DO).
+4. STRUCTURED RESPONSE: Output your response as a valid JSON object matching the JSON schema below.
+5. LANGUAGE SUPPORT: Detect the user's language (English, Hindi, Bengali, Hinglish, or Banglish) and respond in the same language. For example, if the query is in Bengali, the text inside "answer", "possibleCauses", "immediateActions", "avoid", "followUpQuestions" should be in Bengali.
+6. NO HALLUCINATION: Never invent scientific values, approved chemical lists, or research citations. If unsure, say "I don't have enough reliable information to answer that confidently."
+
+JSON Response Schema:
+{
+  "answer": "Detailed structured markdown response. Format with headers: ### What may be happening, ### What to check now, ### What you can do immediately, ### What to avoid, ### What information I need, and ### When to seek professional help.",
+  "possibleCauses": ["array of possible causes"],
+  "immediateActions": ["array of safe immediate steps"],
+  "avoid": ["array of actions to avoid"],
+  "followUpQuestions": ["array of 2-3 specific follow-up questions"],
+  "confidence": "high" or "medium" or "low",
+  "sources": ["array of trusted sources used, e.g. FAO, ICAR, WorldFish"]
+}`;
 
 /**
  * Search RAG knowledge base for context & recommended resources
@@ -113,7 +114,8 @@ async function processFarmingAI({
     imageUrls = [],
     farmContext = {},
     conversationHistory = [],
-    userRole = 'Farmer'
+    userRole = 'Farmer',
+    language = 'en'
 }) {
     const rawQuery = message.trim();
     const { contextSnippets, recommendations } = await retrieveRAGKnowledge(rawQuery);
@@ -124,162 +126,195 @@ async function processFarmingAI({
     let safeNextSteps = [];
     let confidence = 'medium';
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
 
     if (apiKey) {
         try {
-            // Use Google Gemini API if GEMINI_API_KEY is present
-            if (process.env.GEMINI_API_KEY) {
-                const parts = [{ text: `${SYSTEM_PROMPT}\n\nUser Query: ${rawQuery}\nFarm Context: ${JSON.stringify(farmContext)}\nRetrieved Knowledge Context:\n${contextSnippets.join('\n')}` }];
-                
-                // Add Image URLs if present
-                for (const url of imageUrls) {
-                    if (url.startsWith('data:image')) {
-                        const base64Data = url.split(',')[1];
-                        const mimeType = url.substring(url.indexOf(':') + 1, url.indexOf(';'));
-                        parts.push({
-                            inlineData: { mimeType, data: base64Data }
-                        });
+            // Build conversation history payload for contextual memory (limit to last 6 messages)
+            const recentHistory = conversationHistory.slice(-6).map(m => ({
+                role: m.role === 'user' ? 'user' : 'model',
+                parts: [{ text: m.text || '' }]
+            }));
+
+            // Main system instructions + context
+            const userContextPrompt = `Pond Parameters/Farm Context: ${JSON.stringify(farmContext)}
+Retrieved Knowledge Base Context:
+${contextSnippets.join('\n')}
+
+Selected Output Language: ${language} (Ensure all values inside the JSON output match this language. If 'bn' respond in Bengali, if 'hi' respond in Hindi, if 'or' respond in Odia, if 'en' respond in English)
+
+User Query: ${rawQuery}`;
+
+            // Create contents payload for Gemini API
+            const contents = [
+                ...recentHistory,
+                {
+                    role: 'user',
+                    parts: [
+                        { text: userContextPrompt }
+                    ]
+                }
+            ];
+
+            // Append base64 image data if present
+            for (const url of imageUrls) {
+                if (url.startsWith('data:image')) {
+                    const base64Data = url.split(',')[1];
+                    const mimeType = url.substring(url.indexOf(':') + 1, url.indexOf(';'));
+                    contents[contents.length - 1].parts.push({
+                        inlineData: { mimeType, data: base64Data }
+                    });
+                }
+            }
+
+            const response = await axios.post(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+                {
+                    systemInstruction: {
+                        parts: [{ text: SYSTEM_PROMPT }]
+                    },
+                    contents,
+                    generationConfig: {
+                        responseMimeType: 'application/json'
                     }
                 }
+            );
 
-                const response = await axios.post(
-                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-                    { contents: [{ parts }] }
-                );
+            const responseText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (responseText) {
+                const parsed = JSON.parse(responseText);
 
-                llmAnswer = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                // Run quality control check on parsed JSON
+                const cleanResult = runQualityControl(parsed, rawQuery, imageUrls);
+                
+                llmAnswer = cleanResult.answer;
+                possibleCauses = cleanResult.possibleCauses || [];
+                safeNextSteps = cleanResult.immediateActions || [];
+                confidence = cleanResult.confidence || 'medium';
+
+                if (imageUrls.length > 0) {
+                    visualObservations = [
+                        'Image analyzed for visual characteristics.',
+                        imageUrls.length > 1 ? `${imageUrls.length} images submitted.` : 'Single image submitted.'
+                    ];
+                }
+
+                // Append sources if present
+                if (cleanResult.sources && cleanResult.sources.length > 0) {
+                    llmAnswer += `\n\n**Sources:** ${cleanResult.sources.join(', ')}`;
+                }
+
+                return {
+                    answer: llmAnswer,
+                    recommendations,
+                    visualObservations,
+                    possibleCauses,
+                    safeNextSteps,
+                    confidence
+                };
             }
         } catch (apiErr) {
-            console.error('LLM API Call Error, falling back to expert knowledge engine:', apiErr.message);
+            console.error('LLM API Call Error or JSON parse failure:', apiErr.message);
         }
     }
 
     // Fallback expert rule-based response generator when offline or API key absent
-    if (!llmAnswer) {
-        const norm = rawQuery.toLowerCase();
+    const norm = rawQuery.toLowerCase();
 
-        if (imageUrls.length > 0) {
-            confidence = 'medium';
-            visualObservations = [
-                'Image analyzed for visual characteristics.',
-                imageUrls.length > 1 ? `${imageUrls.length} images submitted.` : 'Single image submitted.'
-            ];
+    if (imageUrls.length > 0) {
+        confidence = 'medium';
+        visualObservations = [
+            'Image analyzed for visual characteristics.',
+            imageUrls.length > 1 ? `${imageUrls.length} images submitted.` : 'Single image submitted.'
+        ];
 
-            if (norm.includes('water') || norm.includes('pond') || norm.includes('color')) {
-                llmAnswer = `### Water & Pond Visual Assessment
+        if (norm.includes('water') || norm.includes('pond') || norm.includes('color')) {
+            llmAnswer = `### What may be happening
+Pond water color change can indicate plankton crash or algal blooms.
 
-**Visual Observations:**
-- Visual signs appear consistent with typical pond water conditions.
-- Surface color and turbidity noted from the provided image.
+### What to check now
+- Measure pH levels (standard kit).
+- Check early morning Dissolved Oxygen.
 
-> ⚠️ **Important Caution**: A photograph **cannot reliably measure** key chemical parameters such as **pH, Dissolved Oxygen (DO), Ammonia (NH3), Nitrite (NO2), or Alkalinity**.
+### What you can do immediately
+- Turn on aerators if available.
+- Reduce feeding rate by 50%.
 
-**Possible Causes / Factors:**
-- Algal bloom or plankton collapse
-- High organic load or unconsumed feed at the bottom
-- Recent heavy rain or runoff
+### What to avoid
+- Do not apply heavy fertilizers or chemical treatments blindly.
 
-**What to Check:**
-1. Test pH using a standard pH strip or liquid kit (target: 7.5 - 8.5).
-2. Check Dissolved Oxygen early in the morning before sunrise (target: > 5 mg/L).
-3. Check ammonia level if fish appear sluggish.
-
-**Safe Next Steps:**
-- Aerate the pond using paddle wheel aerators or water pumping.
-- Stop or reduce feeding by 50% for 24 hours until water parameters stabilize.
-- Exchange 10-20% of bottom water if possible.
-
-**When to Seek Professional Help:**
-- If fish are gasping at the surface continuously or mass mortality begins.`;
-                possibleCauses = ['Algal bloom', 'High organic waste', 'Low dissolved oxygen'];
-                safeNextSteps = ['Run aerators', 'Reduce feed by 50%', 'Test pH and DO'];
-            } else {
-                llmAnswer = `### Fish Visual Assessment Guidance
-
-**Visual Observations:**
-- Visual assessment performed on uploaded fish photograph.
-- Visual signs appear consistent with skin/fin texture variations.
-
-> ⚠️ **Important Caution**: Image alone is **insufficient to confirm** a definitive disease diagnosis or biological pathogen.
-
-**Possible Causes:**
-- Environmental stress or poor water quality
-- Bacterial skin lesion or fungal infection (e.g. Saprolegniasis / Epizootic Ulcerative Syndrome)
-- Parasitic attachment (e.g. Argulus / Lernea) or physical handling damage
-
-**Recommended Checks:**
-1. Inspect gills for pale color, mucus buildup, or erosion.
-2. Check if fish are rubbing against pond sides or swimming erratically.
-3. Test pond water pH, ammonia, and oxygen levels.
-
-**Safe Next Steps:**
-- Isolate affected fish in a clean nursery tank if possible.
-- Apply safe salt bath (1-2% solution for 5-10 minutes) under guidance.
-- Maintain clean, well-aerated water.
-
-**What NOT to Do:**
-- Do **NOT** apply unverified broad-spectrum antibiotics or toxic chemicals directly into the pond without professional advice.
-
-**When to Seek Professional Help:**
-- Contact your local Fisheries Extension Officer or aquaculture veterinarian immediately if fish mortality is observed.`;
-                possibleCauses = ['Water quality stress', 'Bacterial/Fungal lesion', 'Physical handling injury'];
-                safeNextSteps = ['Isolate affected fish', 'Check water parameters', 'Salt bath treatment under guidance'];
-            }
-        } else if (norm.includes('feed') || norm.includes('growth') || norm.includes('khabar')) {
-            llmAnswer = `### Fish Feeding & Growth Guidance
-
-**Explanation:**
-To maximize growth rates and Food Conversion Ratio (FCR), feeding must be adjusted according to fish body weight, age, and water temperature.
-
-**Recommended Checks:**
-- Calculate total biomass: (Number of Fish × Average Weight).
-- Feed 2% to 3% of total body weight daily for adult fish (5-8% for fingerlings).
-- Split daily ration into 2 to 3 feeding schedules (morning and late afternoon).
-
-**Safe Next Steps:**
-1. Perform weekly sampling to monitor weight gain and adjust feed quantity.
-2. Store feed bags in a dry, elevated place to prevent aflatoxin/mold buildup.
-3. Stop feeding during extreme weather or when Dissolved Oxygen drops below 3 mg/L.`;
-            confidence = 'high';
-            safeNextSteps = ['Sample weight weekly', 'Adjust ration to 2-3% biomass', 'Stop feed during low DO'];
-        } else if (norm.includes('disease') || norm.includes('dying') || norm.includes('surface') || norm.includes('gasping')) {
-            llmAnswer = `### Emergency Fish Health & Oxygen Guidance
-
-**Possible Causes:**
-- Severe oxygen depletion (hypoxia), especially in early morning.
-- High ammonia toxicity or nitrite buildup (brown blood disease).
-- Acute parasitic or bacterial gill infection.
-
-**Immediate Safe Next Steps:**
-1. **Emergency Aeration**: Turn on all paddlewheel aerators immediately or pump fresh oxygenated water into the pond.
-2. **Stop Feeding**: Stop all feed input immediately — unconsumed feed consumes oxygen and worsens ammonia.
-3. **Water Exchange**: Flush out 15-20% of bottom water if clean source water is available.
-
-**What NOT to Do:**
-- Do not add heavy fertilizers or chemicals while fish are in distress.
-
-**When to Seek Professional Help:**
-- Consult a certified fisheries expert immediately for diagnosis and water testing.`;
-            confidence = 'high';
-            possibleCauses = ['Dissolved oxygen depletion', 'High ammonia toxicity', 'Gill infection'];
-            safeNextSteps = ['Turn on aerators immediately', 'Stop feed completely', 'Exchange 20% water'];
+### When to seek professional help
+- Consult local fisheries officer if water turns dark black or mass gasping occurs.`;
+            possibleCauses = ['Algal bloom', 'High organic waste', 'Low dissolved oxygen'];
+            safeNextSteps = ['Run aerators', 'Reduce feed by 50%', 'Test pH and DO'];
         } else {
-            llmAnswer = `### Aquaculture Advisory
+            llmAnswer = `### What may be happening
+Lesions, scale loss, or spots on the fish body could be related to bacterial infections, fungal attacks, or parasite attachments.
 
-Thank you for reaching out to the **MatsyaLink Farming AI Assistant**. 
+### What to check now
+- Check if fish are rubbing against the pond sides.
+- Check gill health for signs of necrosis.
 
-**Overview:**
-Proper pond preparation, water quality maintenance, seed quality selection, and balanced feed management are the four pillars of successful fish farming.
+### What you can do immediately
+- Isolate affected fish.
+- Apply a safe salt bath (1-2% solution for 5-10 minutes) in a separate tank.
 
-**Recommended Action:**
-- Monitor water pH daily (7.5 - 8.5 ideal).
-- Ensure stocking density matches your pond aeration capacity.
-- Keep a farm record log of daily feeding and weekly growth.
+### What to avoid
+- Do not apply antibiotics directly to the pond without expert advice.
 
-Feel free to ask a specific question about pond preparation, fish diseases, feed calculation, Biofloc, RAS, or government schemes — or upload a photo of your fish or pond!`;
-            confidence = 'medium';
+### When to seek professional help
+- Contact a qualified vet or fisheries office if mortality increases.`;
+            possibleCauses = ['Water quality stress', 'Bacterial/Fungal lesion', 'Physical handling injury'];
+            safeNextSteps = ['Isolate affected fish', 'Check water parameters', 'Salt bath treatment under guidance'];
         }
+    } else if (norm.includes('feed') || norm.includes('growth') || norm.includes('khabar')) {
+        llmAnswer = `### What may be happening
+Improper feeding rates can lead to slow growth or high Feed Conversion Ratio (FCR).
+
+### What to check now
+- Average fish weight (sampling).
+- Calculate total biomass of the pond.
+
+### What you can do immediately
+- Feed 2-3% of total body weight daily for grow-out stage.
+- Split feeding into morning and afternoon slots.
+
+### What to avoid
+- Do not feed fish during heavy rain or when early-morning oxygen is low.`;
+        confidence = 'high';
+        safeNextSteps = ['Sample weight weekly', 'Adjust ration to 2-3% biomass', 'Stop feed during low DO'];
+    } else if (norm.includes('disease') || norm.includes('dying') || norm.includes('surface') || norm.includes('gasping')) {
+        llmAnswer = `### What may be happening
+Early morning surface gasping is typically caused by severe oxygen depletion (hypoxia). Other causes include high ammonia toxicity or gill parasite infestation.
+
+### What to check now
+- Dissolved oxygen levels before sunrise.
+- Check temperature and pH.
+
+### What you can do immediately
+- Run all available paddlewheel aerators immediately.
+- Stop all feed input until behavior returns to normal.
+- Add fresh, clean water if possible.
+
+### What to avoid
+- Do not add fertilizer, manure, or chemical treatments during oxygen stress.
+
+### When to seek professional help
+- If fish continue to die rapidly, seek immediate assistance from a fisheries expert.`;
+        confidence = 'high';
+        possibleCauses = ['Dissolved oxygen depletion', 'High ammonia toxicity', 'Gill infection'];
+        safeNextSteps = ['Turn on aerators immediately', 'Stop feed completely', 'Exchange 20% water'];
+    } else {
+        llmAnswer = `### Welcome to MatsyaLink Farming AI Assistant
+Proper pond preparation, water quality maintenance, and balanced feed management are key to successful fish farming.
+
+### Water Quality Target Parameters:
+- pH: 7.5 - 8.5
+- Dissolved Oxygen: > 5 mg/L
+- Ammonia: < 0.05 mg/L
+
+Please ask a specific question or upload a photo of your fish or pond.`;
+        confidence = 'medium';
     }
 
     return {
@@ -290,6 +325,49 @@ Feel free to ask a specific question about pond preparation, fish diseases, feed
         safeNextSteps,
         confidence
     };
+}
+
+/**
+ * Run backend Quality Control and safety check on the LLM output
+ */
+function runQualityControl(parsed, rawQuery, imageUrls) {
+    const clean = { ...parsed };
+    const normQuery = rawQuery.toLowerCase();
+
+    // 1. Confident diagnosis safety check (prevent false positives based on photo alone)
+    if (imageUrls.length > 0) {
+        const hasConfidentDiagnosis = clean.confidence === 'high' && 
+            (clean.answer.includes('definitely') || clean.answer.includes('diagnosed as') || clean.answer.includes('is caused by'));
+        if (hasConfidentDiagnosis) {
+            clean.confidence = 'medium';
+            clean.answer = `*Visual signs are consistent with several possibilities. An image alone is not sufficient for a definitive diagnosis.*\n\n` + clean.answer;
+        }
+    }
+
+    // 2. Prevent dangerous chemical advice or dosage invention
+    const dangerousKeywords = ['formalin', 'copper sulfate', 'potassium permanganate', 'malachite green', 'antibiotic'];
+    const mentionsChemicals = dangerousKeywords.some(kw => clean.answer.toLowerCase().includes(kw));
+
+    if (mentionsChemicals && !clean.answer.toLowerCase().includes('consult') && !clean.answer.toLowerCase().includes('officer')) {
+        clean.answer += `\n\n> ⚠️ **Safety Warning**: Chemical treatments and dosage application must be verified by a qualified fisheries expert or veterinarian before direct pond application.`;
+    }
+
+    // 3. Fallback check for proper formatting structure
+    if (!clean.answer.includes('### What may be happening') && !clean.answer.includes('### What you can do') && imageUrls.length > 0) {
+        clean.answer = `### What may be happening
+The symptoms/visual signs could indicate environmental stress or local infection.
+
+### What you can do immediately
+- Enhance pond aeration immediately.
+- Reduce feeding rate by 50% for 24 hours.
+
+### What to check now
+- Test water pH, DO, and ammonia levels.
+
+` + clean.answer;
+    }
+
+    return clean;
 }
 
 module.exports = { processFarmingAI, retrieveRAGKnowledge };

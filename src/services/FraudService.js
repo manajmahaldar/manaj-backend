@@ -82,13 +82,13 @@ class FraudService {
         }
 
         // 2. Exact Duplicate Check (User has a listing with same title/category)
-        const titleField = modelType === 'Listing' ? 'productName' : 'fishType';
+        const titleField = modelType === 'Listing' ? 'productName' : 'fishName';
         
         // Some rudimentary similarity check: check if same title was posted recently
         if (listingData[titleField]) {
             const duplicate = await Model.findOne({
                 [userField]: userId,
-                [titleField]: listingData[titleField],
+                [titleField]: listingData[listingData[titleField] ? titleField : 'productName'],
                 createdAt: { $gte: oneHourAgo }
             });
             if (duplicate) {

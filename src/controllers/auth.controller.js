@@ -149,17 +149,18 @@ exports.register = async (req, res) => {
 
         const user = new User({
             name,
-            phone:    normalizedPhone,
-            email:    normalizedEmail,
+            phone: normalizedPhone,
+            email: normalizedEmail,
             password,
             district,
-            localDistrict: localDistrict || '',
-            policeStation: policeStation || '',
+            localDistrict,
+            policeStation,
             role: role || 'farmer',
-            registrationIp: req.ip || '',
-            trustScore: fraudResult.trustScore,
+            accountStatus: 'pending',
+            trustScore: fraudResult.score,
             isFlagged: fraudResult.isFlagged,
-            fraudReason: fraudResult.reason
+            fraudReason: fraudResult.reasons.join('; '),
+            registrationIp: req.ip
         });
         await user.save();
 

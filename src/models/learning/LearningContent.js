@@ -6,7 +6,7 @@ const learningContentSchema = new mongoose.Schema({
     type: { 
         type: String, 
         required: true, 
-        enum: ['video', 'article', 'blog', 'pdf', 'infographic', 'audio', 'presentation', 'downloadable_doc', 'faq', 'external_link'] 
+        enum: ['video', 'article', 'blog', 'pdf', 'infographic', 'audio', 'presentation', 'downloadable_doc', 'faq', 'external_link', 'problems_story', 'success_story'] 
     },
     categories: [{ type: mongoose.Schema.Types.ObjectId, ref: 'LearningCategory', required: true }],
     subcategory: { type: String, default: '' },

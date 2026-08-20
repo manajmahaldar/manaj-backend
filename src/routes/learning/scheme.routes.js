@@ -6,8 +6,9 @@ const { authorizeRoles } = require('../../middleware/role.middleware');
 
 const adminAuth = [auth, authorizeRoles('admin', 'superadmin')];
 
-router.get('/', auth, governmentSchemeController.getSchemes);
-router.get('/:idOrSlug', auth, governmentSchemeController.getSchemeById);
+router.get('/', governmentSchemeController.getSchemes);          // public
+router.get('/:idOrSlug', governmentSchemeController.getSchemeById); // public
+
 
 // CMS Endpoints
 router.post('/', ...adminAuth, governmentSchemeController.createScheme);

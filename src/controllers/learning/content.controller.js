@@ -3,9 +3,11 @@ const LearningCategory = require('../../models/learning/LearningCategory');
 const LearningNotification = require('../../models/learning/LearningNotification');
 const User = require('../../models/User');
 
-const buildSlug = (title) => {
-    return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+const buildSlug = (title, suffix = '') => {
+    const base = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    return suffix ? `${base}-${suffix}` : base;
 };
+
 
 // @desc    Get all learning content (paginated, searched, filtered)
 exports.getAllContent = async (req, res) => {
@@ -120,33 +122,48 @@ exports.getSearchSuggestions = async (req, res) => {
 // @desc    Create content (Admin only)
 exports.createContent = async (req, res) => {
     try {
-        const { title, type, categories, content, language, level, status, publishAt, videoUrl, videoSource, pdfUrl, externalLink, duration, readingTime, featured, pinned, isTrending, tags } = req.body;
-        const slug = buildSlug(title);
-        
+        const {
+            title, type, categories, content, language, level, status, publishAt,
+            videoUrl, videoSource, pdfUrl, externalLink, duration, readingTime,
+            featured, pinned, isTrending, tags, author,
+            thumbnail, mediaUrl, subcategory
+        } = req.body;
+
+        // Generate a unique slug by appending a short timestamp
+        const slug = buildSlug(title, Date.now().toString(36));
+
         const newContent = new LearningContent({
             title,
             slug,
             type,
             categories,
             content,
-            language,
-            level,
-            status,
+            language:     language     || 'en',
+            level:        level        || 'beginner',
+            status:       status       || 'published',
             publishAt,
-            videoUrl,
-            videoSource,
-            pdfUrl,
-            externalLink,
-            duration,
-            readingTime,
-            featured,
-            pinned,
-            isTrending,
-            tags
+            author: {
+                name:   author?.name   || 'MatsyaLink Expert',
+                avatar: author?.avatar || '',
+                bio:    author?.bio    || ''
+            },
+            thumbnail:    thumbnail    || '',
+            subcategory:  subcategory  || '',
+            videoUrl:     videoUrl     || '',
+            videoSource:  videoSource  || '',
+            pdfUrl:       pdfUrl       || '',
+            mediaUrl:     mediaUrl     || '',
+            externalLink: externalLink || '',
+            duration:     duration     || 0,
+            readingTime:  readingTime  || 0,
+            featured:     !!featured,
+            pinned:       !!pinned,
+            isTrending:   !!isTrending,
+            tags:         Array.isArray(tags) ? tags : []
         });
-        
+
         await newContent.save();
-        
+
         // Trigger notification if published
         if (status === 'published') {
             const users = await User.find({ role: { $in: ['farmer', 'seller', 'trader', 'hatchery'] } }, '_id');
@@ -160,30 +177,50 @@ exports.createContent = async (req, res) => {
             }));
             await LearningNotification.insertMany(notifications);
         }
-        
+
         res.status(201).json({ success: true, data: newContent });
     } catch (err) {
+        console.error('[createContent error]', err.message);
         res.status(500).json({ success: false, msg: err.message });
     }
 };
+
 
 // @desc    Update content (Admin only)
 exports.updateContent = async (req, res) => {
     try {
         const { id } = req.params;
         const updates = req.body;
-        if (updates.title) updates.slug = buildSlug(updates.title);
-        
-        const content = await LearningContent.findByIdAndUpdate(id, updates, { new: true });
+
+        // Regenerate slug with the existing doc's suffix (or a new one) to stay unique
+        if (updates.title) {
+            const existing = await LearningContent.findById(id, 'slug');
+            // Keep existing slug suffix if title hasn't changed radically
+            const existingSuffix = existing?.slug?.split('-').pop();
+            updates.slug = buildSlug(updates.title, existingSuffix || Date.now().toString(36));
+        }
+
+        // Ensure author object is always valid
+        if (updates.author) {
+            updates.author = {
+                name:   updates.author.name   || 'MatsyaLink Expert',
+                avatar: updates.author.avatar || '',
+                bio:    updates.author.bio    || ''
+            };
+        }
+
+        const content = await LearningContent.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
         if (!content) {
             return res.status(404).json({ success: false, msg: 'Content not found' });
         }
-        
+
         res.json({ success: true, data: content });
     } catch (err) {
+        console.error('[updateContent error]', err.message);
         res.status(500).json({ success: false, msg: err.message });
     }
 };
+
 
 // @desc    Delete content (Admin only)
 exports.deleteContent = async (req, res) => {
