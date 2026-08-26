@@ -18,6 +18,17 @@ exports.handleFarmingAIChat = async (req, res) => {
             farmContext = {}
         } = req.body;
 
+        // Input Validation
+        if (message && typeof message !== 'string') {
+            return res.status(400).json({ success: false, msg: 'Message must be a string.' });
+        }
+        if (message && message.trim().length > 2000) {
+            return res.status(400).json({ success: false, msg: 'Message is too long. Limit is 2000 characters.' });
+        }
+        if (imageUrls && !Array.isArray(imageUrls)) {
+            return res.status(400).json({ success: false, msg: 'imageUrls must be an array.' });
+        }
+
         if (!message && imageUrls.length === 0) {
             return res.status(400).json({ success: false, msg: 'Please provide a text question or upload an image.' });
         }
@@ -40,7 +51,23 @@ exports.handleFarmingAIChat = async (req, res) => {
             conversation.farmContext = { ...conversation.farmContext, ...farmContext };
         }
 
-        // 2. Add user message to conversation history
+        // 2. Capture existing history BEFORE adding the new user message.
+        //    This prevents the AI from seeing the current question twice
+        //    (once in history and once in the explicit user prompt), which
+        //    was the root cause of repeated/stale responses.
+        const historyBeforeCurrentMessage = [...conversation.messages];
+
+        // 3. Process AI advice with RAG & safety checks — pass prior history only
+        const aiResult = await processFarmingAI({
+            message,
+            imageUrls,
+            farmContext: conversation.farmContext || {},
+            conversationHistory: historyBeforeCurrentMessage,
+            userRole,
+            language: req.body.language || 'en'
+        });
+
+        // 4. Now add user message to conversation history (after AI has responded)
         const userMsg = {
             role: 'user',
             text: message,
@@ -49,17 +76,7 @@ exports.handleFarmingAIChat = async (req, res) => {
         };
         conversation.messages.push(userMsg);
 
-        // 3. Process AI advice with RAG & safety checks
-        const aiResult = await processFarmingAI({
-            message,
-            imageUrls,
-            farmContext: conversation.farmContext || {},
-            conversationHistory: conversation.messages,
-            userRole,
-            language: req.body.language || 'en'
-        });
-
-        // 4. Add assistant response to conversation history
+        // 5. Add assistant response to conversation history
         const assistantMsg = {
             role: 'assistant',
             text: aiResult.answer,
@@ -73,7 +90,7 @@ exports.handleFarmingAIChat = async (req, res) => {
 
         await conversation.save();
 
-        // 5. Log telemetry analytics
+        // 6. Log telemetry analytics
         try {
             await FarmingAIAnalytics.create({
                 userId,
@@ -98,8 +115,10 @@ exports.handleFarmingAIChat = async (req, res) => {
         });
 
     } catch (err) {
-        console.error('Farming AI Controller Error:', err);
-        return res.status(500).json({ success: false, msg: 'Server error processing Farming AI query', error: err.message });
+        console.error('Farming AI Controller Error:', err?.message || err);
+        console.error('Farming AI Error Detail:', JSON.stringify(err?.response?.data || err?.error || err, null, 2));
+        console.error('Farming AI Error Stack:', err?.stack);
+        return res.status(500).json({ success: false, msg: "Sorry, I couldn't process your farming question right now. Please try again.", _debug: err?.message });
     }
 };
 

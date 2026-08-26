@@ -56,17 +56,10 @@ const clearRefreshCookie = (res) => {
 };
 
 /**
- * Validate password strength:
- * 8+ chars, at least one uppercase, lowercase, digit, special char.
+ * Validate password is exactly 6 digits.
  */
-const isStrongPassword = (pw) =>
-    validator.isStrongPassword(pw, {
-        minLength:        8,
-        minLowercase:     1,
-        minUppercase:     1,
-        minNumbers:       1,
-        minSymbols:       1,
-    });
+const isValidSixDigitPassword = (pw) =>
+    /^[0-9]{6}$/.test(pw);
 
 /**
  * Standardize Indian phone numbers to 10 digits by removing
@@ -112,10 +105,10 @@ exports.register = async (req, res) => {
         console.warn(`Registration failed: Invalid phone format (${phone})`);
         return res.status(400).json({ msg: 'Invalid Indian phone number.' });
     }
-    if (!isStrongPassword(password)) {
-        console.warn('Registration failed: Password strength requirements not met');
+    if (!isValidSixDigitPassword(password)) {
+        console.warn('Registration failed: Password must be exactly 6 digits');
         return res.status(400).json({
-            msg: 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.'
+            msg: 'Password must be exactly 6 digits'
         });
     }
     const allowedRoles = ['farmer', 'seller', 'trader', 'hatchery'];
@@ -626,9 +619,9 @@ exports.forgotPassword = async (req, res) => {
 exports.resetPassword = async (req, res) => {
     const { password } = req.body;
 
-    if (!password || !isStrongPassword(password)) {
+    if (!password || !isValidSixDigitPassword(password)) {
         return res.status(400).json({
-            msg: 'Password must be at least 8 characters with uppercase, lowercase, number, and special character.'
+            msg: 'Password must be exactly 6 digits'
         });
     }
 

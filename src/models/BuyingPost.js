@@ -6,7 +6,7 @@ const buyingPostSchema = new mongoose.Schema({
     // Category — fish | feed | medicine
     category: {
         type: String,
-        enum: ['fish', 'feed', 'medicine'],
+        enum: ['fish', 'feed', 'medicine', 'equipment'],
         default: 'fish'
     },
 

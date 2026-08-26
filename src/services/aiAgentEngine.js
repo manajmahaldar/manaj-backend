@@ -2,6 +2,7 @@ const Listing = require('../models/Listing');
 const BuyingPost = require('../models/BuyingPost');
 const User = require('../models/User');
 const Order = require('../models/Order');
+const { Groq } = require('groq-sdk');
 
 // Learning Models if available
 let Article, Video, Scheme;
@@ -18,6 +19,136 @@ const ALL_STATES = ["West Bengal", "Jharkhand", "Assam", "Odisha", "Bihar"];
 
 const normalize = (text) => (text || '').toLowerCase().trim();
 
+const EXTRACTION_SYSTEM_PROMPT = `You are a precise multilingual data extraction AI for Matsyalink, an aquaculture marketplace.
+Your task is to analyze the user's latest message, consider the current state of collected fields, and extract any new values or corrections.
+
+Allowed fields:
+- actionType: "selling" or "buying"
+- category: "Fish", "Spawn", "Fingerling", "Feed", "Medicine", "Equipment"
+- productName: string (e.g. "Rohu", "Catla", "Floating Feed")
+- fishSize: string (e.g. "1-2 kg/piece")
+- feedType: string (e.g. "Starter")
+- packingSize: string (e.g. "50 kg/bag")
+- medicineType: string (e.g. "powder")
+- strength: string
+- quantity: number or string (just the numeric value)
+- unit: "kg", "gm", "pieces", "mound", "ton", "bags", "packs", "quintal", "liter", "ml", "bottles"
+- price: number or string (numeric price per unit)
+- mrp: number or string (original/maximum retail price)
+- district: "West Bengal", "Jharkhand", "Assam", "Odisha", "Bihar"
+- localDistrict: string (district name, e.g. "Malda")
+- policeStation: string (local area or police station name)
+- phoneNumber: string (10 digits)
+- additionalRequirement: string (any specific buyer requirements)
+
+Rules:
+1. ONLY return a JSON object with fields that are newly mentioned, answered, or corrected in the user's latest message.
+2. If a field was NOT mentioned or has NOT changed, do NOT include it or set it to null.
+3. If the user corrects a field (e.g., "actually 700 kg" when it was 500), extract the new value.
+4. Translate and normalize units to one of: "kg", "gm", "pieces", "mound", "ton", "bags", "packs", "quintal".
+5. For district, map only to one of: "West Bengal", "Jharkhand", "Assam", "Odisha", "Bihar".
+6. Return valid JSON only, matching this structure. Do not invent fields outside the allowed list.`;
+
+async function classifyIntentWithGroq(message) {
+    const apiKey = process.env.GROQ_API_KEY;
+    const model = process.env.GROQ_MARKETPLACE_MODEL || 'openai/gpt-oss-120b';
+    if (!apiKey) return null;
+
+    try {
+        const groq = new Groq({ apiKey });
+        const prompt = `Classify the user's intent from their message: "${message}".
+Valid intents:
+- "search": User wants to find listings, search products, check what is available, or query the marketplace (e.g., "Show me Rohu fish available near Malda", "Show Rohu under ₹200").
+- "learning": User is asking general educational/farming/aquaculture questions (e.g., "how to grow Rohu", "treatment for gill rot").
+- "marketplace_form": User wants to create a new buy requirement or sell listing, or answer a question to fill the form.
+
+Return a JSON object in this format:
+{
+  "intent": "search" or "learning" or "marketplace_form",
+  "searchParams": {
+    "productName": string or null,
+    "category": string or null,
+    "district": string or null,
+    "maxPrice": number or null
+  }
+}`;
+
+        const response = await groq.chat.completions.create({
+            messages: [{ role: 'user', content: prompt }],
+            model,
+            response_format: { type: "json_object" },
+            temperature: 0.1,
+            max_tokens: 256
+        });
+        const parsed = JSON.parse(response.choices[0]?.message?.content || '{}');
+        return parsed;
+    } catch (err) {
+        console.error('Groq classification failed:', err.message);
+        return null;
+    }
+}
+
+async function extractFieldsWithGroq(message, currentState) {
+    const apiKey = process.env.GROQ_API_KEY;
+    const model = process.env.GROQ_MARKETPLACE_MODEL || 'openai/gpt-oss-120b';
+    if (!apiKey) {
+        throw new Error('Groq API Key is not configured.');
+    }
+    const groq = new Groq({ apiKey });
+
+    const prompt = `Current State: ${JSON.stringify(currentState)}
+User's Latest Message: "${message}"
+
+Extract the updated fields in JSON format:`;
+
+    const response = await groq.chat.completions.create({
+        messages: [
+            { role: 'system', content: EXTRACTION_SYSTEM_PROMPT },
+            { role: 'user', content: prompt }
+        ],
+        model,
+        response_format: { type: "json_object" },
+        temperature: 0.1,
+        max_tokens: 1024
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+        throw new Error('Empty response from Groq');
+    }
+    return JSON.parse(content);
+}
+
+async function generateDescriptionWithGroq(result, language) {
+    const apiKey = process.env.GROQ_API_KEY;
+    const model = process.env.GROQ_MARKETPLACE_MODEL || 'openai/gpt-oss-120b';
+    if (!apiKey) return null;
+    try {
+        const groq = new Groq({ apiKey });
+        const prompt = `You are a professional Matsyalink aquaculture listing assistant. Generate a highly professional, concise, and clean description (1-2 sentences) in the user's language (${language === 'bn' ? 'Bengali' : language === 'hi' ? 'Hindi' : 'English'}) based on the following structured data. Keep it highly relevant for buyers. Do not invent any extra details (like freshness, fish size, quality, grade) unless explicitly listed. Do not output anything other than the final description text:
+Data:
+- Product: ${result.productName} (${result.category})
+- Quantity: ${result.quantity} ${result.unit}
+- Price: ₹${result.price}/${result.unit}
+- Original MRP: ₹${result.mrp}
+- Location: ${result.policeStation}, ${result.localDistrict}, ${result.district}
+- Contact: ${result.phoneNumber}
+
+Description:`;
+
+        const response = await groq.chat.completions.create({
+            messages: [{ role: 'user', content: prompt }],
+            model,
+            temperature: 0.3,
+            max_tokens: 256
+        });
+        return response.choices[0]?.message?.content?.trim();
+    } catch (err) {
+        console.error('Groq description generation failed:', err.message);
+        return null;
+    }
+}
+
 /**
  * Main AI Engine Process Function
  */
@@ -25,14 +156,85 @@ async function processAIRequest({ message = '', context = {}, user = null, langu
     const raw = message.trim();
     const norm = normalize(raw);
 
-    // 1. LEARNING / EDUCATIONAL QUERY
+    // Try intent classification via Groq
+    const classification = await classifyIntentWithGroq(raw);
+    if (classification && classification.intent === 'search') {
+        try {
+            const params = classification.searchParams || {};
+            const query = { status: 'approved' };
+            if (params.productName) {
+                query.productName = new RegExp(params.productName, 'i');
+            }
+            if (params.category) {
+                query.category = new RegExp(params.category, 'i');
+            }
+            if (params.district) {
+                const stateList = ["West Bengal", "Jharkhand", "Assam", "Odisha", "Bihar"];
+                const matchedState = stateList.find(s => s.toLowerCase() === params.district.toLowerCase());
+                if (matchedState) {
+                    query.district = new RegExp(matchedState, 'i');
+                } else {
+                    query.localDistrict = new RegExp(params.district, 'i');
+                }
+            }
+            const results = await Listing.find(query).limit(5);
+            let filtered = results;
+            if (params.maxPrice) {
+                const maxVal = parseFloat(params.maxPrice);
+                if (!isNaN(maxVal)) {
+                    filtered = results.filter(item => {
+                        const p = parseFloat(item.price);
+                        return !isNaN(p) && p <= maxVal;
+                    });
+                }
+            }
+
+            const replyText = filtered.length > 0
+                ? {
+                    en: 'Here are some listings I found matching your search:',
+                    bn: 'আপনার অনুসন্ধানের সাথে মিলে যাওয়া কিছু লিস্টিং এখানে দেওয়া হলো:',
+                    hi: 'आपके खोज से मेल खाते कुछ लिस्टिंग यहाँ दिए गए हैं:',
+                    or: 'ଆପଣଙ୍କ ସନ୍ଧାନ ସହିତ ମେଳ ଖାଉଥିବା କିଛି ଲିଷ୍ଟିଂ ଏଠାରେ ଦିଆଗଲା:'
+                  }[language] || 'Here are some listings I found matching your search:'
+                : {
+                    en: "I couldn't find any matching listings in the marketplace right now.",
+                    bn: 'এই মুহূর্তে বাজারে কোনো লিস্টিং খুঁজে পাওয়া যায়নি।',
+                    hi: 'इस समय बाजार में कोई लिस्टिंग नहीं मिली।',
+                    or: 'ଏହି ସମୟରେ ବଜାରରେ କୌଣସି ଲିଷ୍ଟିଂ ମିଳିଲା ନାହିଁ।'
+                  }[language] || "I couldn't find any matching listings in the marketplace right now.";
+
+            return {
+                type: 'search_results',
+                intent: 'search',
+                reply: replyText,
+                results: filtered.map(item => ({
+                    id: String(item._id),
+                    productName: item.productName,
+                    localDistrict: item.localDistrict,
+                    district: item.district,
+                    quantity: item.quantity,
+                    unit: item.unit,
+                    price: item.price
+                }))
+            };
+        } catch (err) {
+            console.error('Marketplace search execution failed:', err.message);
+        }
+    }
+
+    if (classification && classification.intent === 'learning') {
+        return await handleLearningQA(norm, raw, language);
+    }
+
+    // 1. LEARNING / EDUCATIONAL QUERY (Fallback check)
     if (isLearningQuery(norm)) {
         return await handleLearningQA(norm, raw, language);
     }
 
     // 2. MARKETPLACE FORM ASSISTANT (selling / buying / guided creation)
-    return handleMarketplaceFormAssistant(norm, raw, context, user, language);
+    return await handleMarketplaceFormAssistant(norm, raw, context, user, language);
 }
+
 
 /**
  * Check if input is a learning query
@@ -94,9 +296,20 @@ function convertIndicDigitsToAscii(str = '') {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GUIDED FIELD SEQUENCES — category-aware BUY flow
+// GUIDED FIELD SEQUENCES — category-aware flow
 // ─────────────────────────────────────────────────────────────────────────────
 
+// The 6 supported categories for AI-guided listing
+const SUPPORTED_CATEGORIES = ['Fish', 'Spawn', 'Fingerling', 'Feed', 'Medicine', 'Equipment'];
+
+// Simplified flow for Fish, Spawn, Fingerling, Feed
+// Questions: sell/buy → category → product → quantity → unit → price → MRP → state → district → police station → (description)
+const GUIDED_FIELDS_SIMPLE = [
+    'actionType', 'category', 'productName', 'quantity', 'unit', 'price', 'mrp',
+    'district', 'localDistrict', 'policeStation', 'phoneNumber'
+];
+
+// Legacy full sell flow (kept for other categories if ever re-enabled)
 const GUIDED_FIELDS_SELL = [
     'actionType', 'category', 'productName', 'quantity', 'unit', 'price', 'mrp',
     'district', 'localDistrict', 'policeStation', 'phoneNumber'
@@ -123,17 +336,23 @@ const GUIDED_FIELDS_BUY_MEDICINE = [
     'price', 'district', 'localDistrict', 'policeStation', 'phoneNumber', 'additionalRequirement'
 ];
 
+function isSimpleCategory(category) {
+    const cat = (category || '').toLowerCase();
+    return cat === 'fish' || cat === 'spawn' || cat === 'fingerling' || cat === 'feed';
+}
+
 function getGuidedFields(actionType, category) {
+    // Fish, Spawn, Fingerling always use the simplified 7-step flow
+    if (isSimpleCategory(category)) return GUIDED_FIELDS_SIMPLE;
     if (actionType !== 'buying') {
         if ((category || '').toLowerCase() === 'equipment') return GUIDED_FIELDS_SELL_EQUIPMENT;
         return GUIDED_FIELDS_SELL;
     }
     const cat = (category || '').toLowerCase();
-    if (cat === 'fish') return GUIDED_FIELDS_BUY_FISH;
     if (cat === 'feed') return GUIDED_FIELDS_BUY_FEED;
     if (cat === 'medicine') return GUIDED_FIELDS_BUY_MEDICINE;
-    // Unknown category or not yet set — use fish as default
-    return GUIDED_FIELDS_BUY_FISH;
+    // Unknown category or not yet set — use simple as default
+    return GUIDED_FIELDS_SIMPLE;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -153,10 +372,10 @@ function getQuestion(field, language, result) {
             or: '🛒 ଆପଣ **ବିକ୍ରି** କରିବାକୁ ଚାହାଁନ୍ତି କି **କିଣିବାକୁ**?'
         },
         category: {
-            en: `🛒 What do you want to ${isSelling ? 'sell' : 'buy'}? (Fish, Spawn, Fingerling, Feed, Medicine, or Equipment)`,
-            bn: `🛒 আপনি কী ${isSelling ? 'বিক্রি' : 'কিনতে'} চান? (মাছ, রেণু পোনা, পোনা, খাবার, ওষুধ, বা যন্ত্রপাতি)`,
-            hi: `🛒 आप क्या ${isSelling ? 'बेचना' : 'खरीदना'} चाहते हैं? (मछली, रेणु, पोना, चारा, दवा, या उपकरण)`,
-            or: `🛒 ଆପଣ କ'ଣ ${isSelling ? 'ବିକ୍ରି' : 'କିଣିବାକୁ'} ଚାହୁଁଛନ୍ତି? (ମାଛ, ରେଣୁ ପୋନା, ପୋନା, ଖାଦ୍ୟ, ଔଷଧ, ବା ଉପକରଣ)`
+            en: `🐟 Which category do you want to ${isSelling ? 'sell' : 'buy'}?\n1️⃣ **Fish** (e.g. Rohu, Catla)\n2️⃣ **Spawn / Renu** (fish eggs / spawn)\n3️⃣ **Fingerling / Chara** (young fish seed)\n4️⃣ **Feed** (e.g. Floating Feed, Starter Feed)\n5️⃣ **Medicine** (e.g. Probiotics, Sanitizers)\n6️⃣ **Equipment** (e.g. Aerators, Nets, Pumps)`,
+            bn: `🐟 আপনি কোন বিভাগে ${isSelling ? 'বিক্রি' : 'কিনতে'} চান?\n1️⃣ **মাছ** (যেমন: রুই, কাতলা)\n2️⃣ **রেণু পোনা** (মাছের ডিম/রেণু)\n3️⃣ **পোনা / চারা** (ছোট পোনা মাছ)\n4️⃣ **খাবার** (যেমন: ফ্লোটিং ফিড, স্টার্টার ফিড)\n5️⃣ **ওষুধ** (যেমন: প্রোবায়োটিক, স্যানিটাইজার)\n6️⃣ **যন্ত্রপাতি** (যেমন: এরেটর, জাল, পাম্প)`,
+            hi: `🐟 आप किस श्रेणी में ${isSelling ? 'बेचना' : 'खरीदना'} चाहते हैं?\n1️⃣ **मछली** (जैसे: रोहू, कतला)\n2️⃣ **रेणु / स्पॉन** (मछली के अंडे)\n3️⃣ **फिंगरलिंग / चारा** (छोटी मछली)\n4️⃣ **चारा** (जैसे: फ्लोटिंग फ़ीड, स्टार्टर फ़ीड)\n5️⃣ **दवा** (जैसे: प्रोबायोटिक्स, सैनिटाइज़र)\n6️⃣ **उपकरण** (जैसे: एरेटर, जाल, पंप)`,
+            or: `🐟 ଆପଣ କେଉଁ ବର୍ଗରେ ${isSelling ? 'ବିକ୍ରି' : 'କିଣିବାକୁ'} ଚାହୁଁଛନ୍ତି?\n1️⃣ **ମାଛ** (ଯଥା: ରୋହୁ, କଟ୍ଲା)\n2️⃣ **ରେଣୁ ପୋନା** (ମାଛ ଅଣ୍ଡା/ରେଣୁ)\n3️⃣ **ଫିଙ୍ଗର୍ଲିଂ / ଚାରା** (ଛୋଟ ମାଛ ଚାରା)\n4️⃣ **ଖାଦ୍ୟ** (ଯଥା: ଫ୍ଲୋଟିଂ ଫିଡ, ଷ୍ଟାର୍ଟର ଫିଡ)\n5️⃣ **ଔଷଧ** (ଯଥା: ପ୍ରୋବାୟୋଟିକ୍ସ, ସାନିଟାଇଜର)\n6️⃣ **ଉପକରଣ** (ଯଥା: ଏରେଟର, ଜାଲ, ପମ୍ପ)`
         },
         productName: {
             en: cat === 'feed'
@@ -165,14 +384,22 @@ function getQuestion(field, language, result) {
                     ? '✏️ What medicine or product do you want to sell? (e.g. C-Pack)'
                     : cat === 'equipment'
                         ? '✏️ What equipment do you want to sell? (e.g. Aerator, Fish Feed Pump, Net)'
-                        : '✏️ What type of fish do you want to sell? (e.g. Rohu, Catla)',
+                        : cat === 'spawn'
+                            ? '✏️ What is the spawn / renu product name? (e.g. Rohu Spawn, Catla Renu)'
+                            : cat === 'fingerling'
+                                ? '✏️ What type of fingerling / chara? (e.g. Rohu Chara, Catla Fingerling)'
+                                : '✏️ What type of fish? (e.g. Rohu, Catla, Mrigal)',
             bn: cat === 'feed'
                 ? '✏️ কী ধরনের খাবার বিক্রি করতে চান? (যেমন: প্রি-স্টার্টার মাছের খাবার)'
                 : cat === 'medicine'
                     ? '✏️ কোন ওষুধ বিক্রি করতে চান? (যেমন: সি-প্যাক)'
                     : cat === 'equipment'
                         ? '✏️ কী যন্ত্রপাতি বিক্রি করতে চান? (যেমন: এরেটর, পাম্প, জাল)'
-                        : '✏️ কোন মাছ বিক্রি করতে চান? (যেমন: রুই, কাতলা)',
+                        : cat === 'spawn'
+                            ? '✏️ রেণু পোনার নাম কী? (যেমন: রুই রেণু, কাতলা রেণু)'
+                            : cat === 'fingerling'
+                                ? '✏️ চারা পোনার ধরন কী? (যেমন: রুই চারা, কাতলা পোনা)'
+                                : '✏️ কোন মাছ? (যেমন: রুই, কাতলা, মৃগেল)',
             hi: cat === 'feed'
                 ? '✏️ किस प्रकार का चारा बेचना है? (जैसे: प्री-स्टार्टर मछली चारा)'
                 : cat === 'medicine'
@@ -221,32 +448,56 @@ function getQuestion(field, language, result) {
             or: `📦 ଆପଣ କେତେ ପରିମାଣ ${isSelling ? 'ବିକ୍ରି' : 'କିଣିବାକୁ'} ଚାହୁଁଛନ୍ତି? (ଯଥା: 1000 kg, 50 ବ୍ୟାଗ)`
         },
         unit: {
-            en: '⚖️ What unit? (kg, bags, packs, pieces, gm, ton)',
-            bn: '⚖️ কোন ইউনিট? (কেজি, বস্তা, প্যাক, পিস, গ্রাম, টন)',
-            hi: '⚖️ कौन सी इकाई? (kg, bags, packs, pieces, gm, ton)',
-            or: '⚖️ କେଉଁ ୟୁନିଟ? (kg, bags, packs, pieces, gm, ton)'
+            en: cat === 'medicine'
+                ? '⚖️ What unit? (kg, gm, liter, ml, packs, pieces, bottles)'
+                : '⚖️ What unit? (kg, bags, packs, pieces, gm, ton)',
+            bn: cat === 'medicine'
+                ? '⚖️ কোন ইউনিট? (কেজি, গ্রাম, লিটার, মিলি, প্যাক, পিস, বোতল)'
+                : '⚖️ কোন ইউনিট? (কেজি, বস্তা, প্যাক, পিস, গ্রাম, টন)',
+            hi: cat === 'medicine'
+                ? '⚖️ कौन सी इकाई? (kg, gm, लीटर, ml, packs, pieces, बोतल)'
+                : '⚖️ कौन सी इकाई? (kg, bags, packs, pieces, gm, ton)',
+            or: cat === 'medicine'
+                ? '⚖️ କେଉଁ ୟୁନିଟ? (kg, gm, liter, ml, packs, pieces, ବୋତଲ)'
+                : '⚖️ କେଉଁ ୟୁନିଟ? (kg, bags, packs, pieces, gm, ton)'
         },
         price: {
             en: isSelling
                 ? cat === 'equipment'
                     ? '💰 What is your selling price? (e.g. ₹5000, ₹12000)'
-                    : `💰 What is your price per ${unit}? (e.g. ₹220/kg, ₹5000/ton)`
-                : `💰 What is your budget per ${unit}? (e.g. ₹220/kg, ₹2500/bag)`,
+                    : cat === 'medicine'
+                        ? '💰 What is your selling price? (e.g. ₹200, ₹500)'
+                        : `💰 What is your price per ${unit}? (e.g. ₹220/kg, ₹5000/ton)`
+                : cat === 'medicine'
+                    ? '💰 What is your budget / price? (e.g. ₹200, ₹500)'
+                    : `💰 What is your budget per ${unit}? (e.g. ₹220/kg, ₹2500/bag)`,
             bn: isSelling
                 ? cat === 'equipment'
                     ? '💰 বিক্রয় মূল্য কত? (যেমন: ₹৫০০০, ₹১২০০০)'
-                    : `💰 প্রতি ${unit} মূল্য কত? (যেমন: ₹২২০/কেজি)`
-                : `💰 প্রতি ${unit} বাজেট কত? (যেমন: ₹২২০/কেজি, ₹২৫০০/বস্তা)`,
+                    : cat === 'medicine'
+                        ? '💰 বিক্রয় মূল্য কত? (যেমন: ₹২০০, ₹৫০০)'
+                        : `💰 প্রতি ${unit} মূল্য কত? (যেমন: ₹২২০/কেজি)`
+                : cat === 'medicine'
+                    ? '💰 বাজেট/মূল্য কত? (যেমন: ₹২০০, ₹৫০০)'
+                    : `💰 প্রতি ${unit} বাজেট কত? (যেমন: ₹২২০/কেজি, ₹২৫০০/বস্তা)`,
             hi: isSelling
                 ? cat === 'equipment'
                     ? '💰 विक्रय मूल्य क्या है? (जैसे: ₹5000, ₹12000)'
-                    : `💰 प्रति ${unit} कीमत कितनी है? (जैसे: ₹220/kg)`
-                : `💰 प्रति ${unit} बजट कितना है? (जैसे: ₹220/kg, ₹2500/bag)`,
+                    : cat === 'medicine'
+                        ? '💰 बिक्री मूल्य कितना है? (जैसे: ₹200, ₹500)'
+                        : `💰 प्रति ${unit} कीमत कितनी है? (जैसे: ₹220/kg)`
+                : cat === 'medicine'
+                    ? '💰 बजट/मूल्य कितना? (जैसे: ₹200, ₹500)'
+                    : `💰 प्रति ${unit} बजट कितना है? (जैसे: ₹220/kg, ₹2500/bag)`,
             or: isSelling
                 ? cat === 'equipment'
                     ? '💰 ବିକ୍ରୟ ମୂଲ୍ୟ କେତେ? (ଯଥା: ₹5000, ₹12000)'
-                    : `💰 ପ୍ରତି ${unit} ମୂଲ୍ୟ କେତେ? (ଯଥା: ₹220/kg)`
-                : `💰 ପ୍ରତି ${unit} ବଜେଟ୍ କେତେ? (ଯଥା: ₹220/kg, ₹2500/bag)`
+                    : cat === 'medicine'
+                        ? '💰 ବିକ୍ରୀ ମୂଲ୍ୟ କେତେ? (ଯଥା: ₹200, ₹500)'
+                        : `💰 ପ୍ରତି ${unit} ମୂଲ୍ୟ କେତେ? (ଯଥା: ₹220/kg)`
+                : cat === 'medicine'
+                    ? '💰 ବଜେଟ/ମୂଲ୍ୟ କେତେ? (ଯଥା: ₹200, ₹500)'
+                    : `💰 ପ୍ରତି ${unit} ବଜେଟ୍ କେତେ? (ଯଥା: ₹220/kg, ₹2500/bag)`
         },
         mrp: {
             en: '🏷️ What is the MRP / Original Price? (e.g. ₹8000) — buyers will see the discount',
@@ -292,7 +543,7 @@ function getQuestion(field, language, result) {
 /**
  * Handle Marketplace Form Assistant (Creation & Auto-fill)
  */
-function handleMarketplaceFormAssistant(norm, raw, context = {}, user = {}, language = 'en') {
+async function handleMarketplaceFormAssistant(norm, raw, context = {}, user = {}, language = 'en') {
     const normAscii = convertIndicDigitsToAscii(norm);
 
     // ── Initial state — preserve all context fields ────────────────────────
@@ -324,9 +575,49 @@ function handleMarketplaceFormAssistant(norm, raw, context = {}, user = {}, lang
         nextField: null
     };
 
-    if (!norm) return formatFormResponse(result, user, language);
+    if (!norm) return await formatFormResponse(result, user, language);
 
     const activeField = context.nextField;
+
+    // ─── 00. GROQ MULTILINGUAL EXTRACTION ──────────────────────────────────
+    let groqExtracted = false;
+    try {
+        const extracted = await extractFieldsWithGroq(raw, result);
+        console.log('Groq extracted fields:', extracted);
+        for (const [key, value] of Object.entries(extracted)) {
+            if (value !== null && value !== undefined && value !== '') {
+                if (key === 'unit') {
+                    result[key] = normalizeUnit(value);
+                } else if (key === 'district') {
+                    const stateList = ["West Bengal", "Jharkhand", "Assam", "Odisha", "Bihar"];
+                    const matchedState = stateList.find(s => s.toLowerCase() === String(value).toLowerCase());
+                    if (matchedState) {
+                        result[key] = matchedState;
+                    }
+                } else if (key === 'phoneNumber') {
+                    const digits = String(value).replace(/\D/g, '');
+                    if (digits.length === 10) {
+                        result[key] = digits;
+                    }
+                } else if (key === 'actionType') {
+                    if (['selling', 'buying'].includes(value)) {
+                        result[key] = value;
+                    }
+                } else if (key === 'category') {
+                    const validCats = ["Fish", "Spawn", "Fingerling", "Feed", "Medicine", "Equipment"];
+                    const matchedCat = validCats.find(c => c.toLowerCase() === String(value).toLowerCase());
+                    if (matchedCat) {
+                        result[key] = matchedCat;
+                    }
+                } else {
+                    result[key] = value;
+                }
+                groqExtracted = true;
+            }
+        }
+    } catch (err) {
+        console.warn('Groq extraction failed or offline, falling back to regex:', err.message);
+    }
 
     // ─── 0. CORRECTION HANDLING ───────────────────────────────────────────
     let isCorrection = false;
@@ -403,28 +694,34 @@ function handleMarketplaceFormAssistant(norm, raw, context = {}, user = {}, lang
     if (!result.category) {
         for (const [cat, kws] of Object.entries(categoryKeywords)) {
             if (kws.some(k => norm.includes(k))) {
-                // Map to buying-supported categories
-                if (cat === 'Equipment' || cat === 'Spawn' || cat === 'Fingerling') {
-                    // Route unsupported buying categories to Fish as default
-                    result.category = result.actionType === 'buying' ? 'Fish' : cat;
-                } else {
+                // Only allow the 6 supported categories
+                if (cat === 'Fish' || cat === 'Spawn' || cat === 'Fingerling' || cat === 'Feed' || cat === 'Medicine' || cat === 'Equipment') {
                     result.category = cat;
+                } else {
+                    // Unsupported category — ignore, will re-ask
                 }
                 break;
             }
         }
         if (!result.category && activeField === 'category') {
             const catMap = {
-                'fish': 'Fish', 'মাছ': 'Fish', 'मछली': 'Fish',
-                'spawn': 'Spawn', 'renu': 'Spawn', 'রেণু': 'Spawn',
-                'fingerling': 'Fingerling', 'chara': 'Fingerling', 'পোনা': 'Fingerling',
-                'feed': 'Feed', 'খাবার': 'Feed', 'খাদ্য': 'Feed', 'चारा': 'Feed',
-                'medicine': 'Medicine', 'ওষুধ': 'Medicine', 'ঔষধ': 'Medicine', 'दवा': 'Medicine',
-                'equipment': 'Equipment', 'যন্ত্রপাতি': 'Equipment', 'উপকরণ': 'Equipment', 'उपकरण': 'Equipment'
+                'fish': 'Fish', 'মাছ': 'Fish', 'मछली': 'Fish', 'ମାଛ': 'Fish',
+                '1': 'Fish', 'one': 'Fish',
+                'spawn': 'Spawn', 'renu': 'Spawn', 'রেণু': 'Spawn', 'রেণু পোনা': 'Spawn', 'ରେଣୁ': 'Spawn',
+                '2': 'Spawn', 'two': 'Spawn',
+                'fingerling': 'Fingerling', 'chara': 'Fingerling', 'চারা': 'Fingerling', 'পোনা': 'Fingerling', 'ପୋନା': 'Fingerling',
+                '3': 'Fingerling', 'three': 'Fingerling',
+                'feed': 'Feed', 'khabar': 'Feed', 'dana': 'Feed', 'খাবার': 'Feed', 'খাদ্য': 'Feed', 'चारा': 'Feed', 'খাদ्य': 'Feed', 'ଖାଦ୍ୟ': 'Feed',
+                '4': 'Feed', 'four': 'Feed',
+                'medicine': 'Medicine', 'dawa': 'Medicine', 'ঔষধ': 'Medicine', 'दवा': 'Medicine', 'ଔଷଧ': 'Medicine',
+                '5': 'Medicine', 'five': 'Medicine',
+                'equipment': 'Equipment', 'machinery': 'Equipment', 'যন্ত্রপাতি': 'Equipment', 'उपकरण': 'Equipment', 'ଉପକରଣ': 'Equipment',
+                '6': 'Equipment', 'six': 'Equipment'
             };
             for (const [k, v] of Object.entries(catMap)) {
                 if (norm.includes(k)) { result.category = v; break; }
             }
+            // Default to Fish if still not matched
             if (!result.category) result.category = 'Fish';
         }
     }
@@ -536,8 +833,8 @@ function handleMarketplaceFormAssistant(norm, raw, context = {}, user = {}, lang
     }
 
     // ─── 9. QUANTITY & UNIT ───────────────────────────────────────────────
-    // Extended unit list to include bags, packs, pieces
-    const unitPattern = '(kg|kilo|kilogram|kilograms|gm|gram|grams|piece|pieces|pcs|pc|mound|mounds|mon|maund|ton|tons|bag|bags|pack|packs|quintal|কেজি|গ্রাম|পিস|টন|বস্তা|মন)';
+    // Extended unit list to include bags, packs, pieces, and medicine units (liter, ml, bottle)
+    const unitPattern = '(kg|kilo|kilogram|kilograms|gm|gram|grams|piece|pieces|pcs|pc|mound|mounds|mon|maund|ton|tons|bag|bags|pack|packs|quintal|liter|litre|liters|litres|ml|milliliter|millilitre|bottle|bottles|কেজি|গ্রাম|পিস|টন|বস্তা|মন|লিটার|মিলি|বোতল)';
     const qtyMatchExt = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*${unitPattern}`, 'i').exec(normAscii);
     if (qtyMatchExt) {
         result.quantity = qtyMatchExt[1];
@@ -560,19 +857,26 @@ function handleMarketplaceFormAssistant(norm, raw, context = {}, user = {}, lang
         if (u) result.unit = u;
     }
 
-    // ─── 10. PRICE / BUDGET ────────────────────────────────────────────────
-    const priceMatchExt = normAscii.match(/(?:rs\.?|₹|taka|inr|price|budget|rate|mullo|dam|টাকা|रुपये|ଟଙ୍କା|মূল্য|দাম)\s*[:=]?\s*(\d+(?:\.\d+)?)/) ||
-                          normAscii.match(/(\d+(?:\.\d+)?)\s*(?:rs|taka|inr|\/kg|per kg|rupees|per bag|per pack|per piece|টাকা|রুপি|ଟଙ୍କା|প্রতি|কেজি)/) ||
-                          (activeField === 'price' && normAscii.match(/^(\d+(?:\.\d+)?)$/));
-    if (priceMatchExt) {
-        result.price = priceMatchExt[1];
-    }
-
     // ─── 10b. MRP EXTRACTION ──────────────────────────────────────────────
-    const mrpMatchExt = normAscii.match(/(?:mrp|original price|market price|list price)\s*[:=]?\s*(\d+(?:\.\d+)?)/i) ||
-                        (activeField === 'mrp' && normAscii.match(/^(\d+(?:\.\d+)?)$/));
+    const mrpRegex = /(?:mrp|original price|market price|list price)\s*(?:is|to|:|=)?\s*(?:rs\.?|₹|taka|inr|টাকা|रुपये|ଟଙ୍କା)?\s*(\d+(?:\.\d+)?)/i;
+    let mrpMatchExt = normAscii.match(mrpRegex);
+    if (!mrpMatchExt && activeField === 'mrp') {
+        mrpMatchExt = normAscii.match(/(?:rs\.?|₹|taka|inr|টাকা|रुपये|ଟଙ୍କା)?\s*(\d+(?:\.\d+)?)\s*(?:rs|taka|inr|rupees|টাকা|রুপি|ଟଙ୍କା)?/i);
+    }
     if (mrpMatchExt) {
         result.mrp = mrpMatchExt[1];
+    }
+
+    // ─── 10. PRICE / BUDGET ────────────────────────────────────────────────
+    let normAsciiForPrice = normAscii;
+    if (mrpMatchExt && mrpMatchExt[0]) {
+        normAsciiForPrice = normAscii.replace(mrpMatchExt[0], '');
+    }
+    const priceMatchExt = normAsciiForPrice.match(/(?:rs\.?|₹|taka|inr|price|budget|rate|mullo|dam|টাকা|रुपये|ଟଙ୍କା|মূল্য|দাম)\s*[:=]?\s*(\d+(?:\.\d+)?)/) ||
+                          normAsciiForPrice.match(/(\d+(?:\.\d+)?)\s*(?:rs|taka|inr|\/kg|per kg|rupees|per bag|per pack|per piece|টাকা|রুপি|ଟଙ୍କା|প্রতি|কেজি)/) ||
+                          (activeField === 'price' && normAsciiForPrice.match(/^(\d+(?:\.\d+)?)$/));
+    if (priceMatchExt) {
+        result.price = priceMatchExt[1];
     }
 
     // ─── 11. PHONE NUMBER ─────────────────────────────────────────────────
@@ -677,13 +981,17 @@ function normalizeUnit(unitStr) {
     if (!unitStr) return '';
     const u = unitStr.toLowerCase().trim();
     if (['kg', 'kilo', 'kilogram', 'kilograms', 'কেজি', 'କେଜି'].includes(u)) return 'kg';
-    if (['gm', 'gram', 'grams', 'g', 'গ্রাম', 'ଗ୍ରାମ'].includes(u)) return 'gm';
+    if (['gm', 'gram', 'grams', 'g', 'গ্রাম', 'গ্রামের', 'ଗ୍ରାମ'].includes(u)) return 'gm';
     if (['piece', 'pieces', 'pc', 'pcs', 'টি', 'ପିସ', 'ଟି'].includes(u)) return 'pieces';
     if (['mound', 'mounds', 'mon', 'maund', 'মন', 'ମଣ'].includes(u)) return 'mound';
     if (['ton', 'tons', 't', 'ଟନ', 'ଟନ୍', 'টন'].includes(u)) return 'ton';
     if (['bag', 'bags', 'বস্তা', 'ବସ୍ତା'].includes(u)) return 'bags';
     if (['pack', 'packs', 'packet', 'packets', 'প্যাক', 'ପ୍ୟାକ'].includes(u)) return 'packs';
     if (['quintal'].includes(u)) return 'quintal';
+    // Medicine-specific units
+    if (['liter', 'litre', 'liters', 'litres', 'l', 'লিটার', 'ଲିଟର'].includes(u)) return 'liter';
+    if (['ml', 'milliliter', 'millilitre', 'milliliters', 'millilitres', 'milli', 'মিলি', 'মিলিলিটার', 'ମିଲି'].includes(u)) return 'ml';
+    if (['bottle', 'bottles', 'বোতল', 'বোতলে', 'ବୋତଲ'].includes(u)) return 'bottles';
     return u;
 }
 
@@ -698,6 +1006,19 @@ function getNextMissingField(result) {
     if (!actionType) return 'actionType';
     if (!result.category) return 'category';
     if (!result.productName) return 'productName';
+
+    // ── Simplified flow for Fish, Spawn, Fingerling, Feed ──
+    if (isSimpleCategory(catLower)) {
+        if (!result.quantity) return 'quantity';
+        if (!result.unit) return 'unit';
+        if (!result.price) return 'price';
+        if (!result.mrp) return 'mrp';
+        if (!result.district) return 'district';
+        if (!result.localDistrict) return 'localDistrict';
+        if (!result.policeStation) return 'policeStation';
+        if (!result.phoneNumber) return 'phoneNumber';
+        return null; // Done
+    }
 
     if (actionType === 'buying') {
         // Fish-specific
@@ -734,7 +1055,7 @@ function getNextMissingField(result) {
     return null; // All done
 }
 
-function formatFormResponse(result, user, language) {
+async function formatFormResponse(result, user, language) {
     // Determine missing fields for display
     const missing = [];
     if (!result.actionType) missing.push('actionType');
@@ -743,19 +1064,34 @@ function formatFormResponse(result, user, language) {
 
     const catLower = (result.category || '').toLowerCase();
 
-    if (result.actionType === 'buying') {
-        if (catLower === 'fish' && !result.fishSize) missing.push('fishSize');
-        if (catLower === 'feed' && !result.feedType) missing.push('feedType');
-        if ((catLower === 'feed' || catLower === 'medicine') && !result.packingSize) missing.push('packingSize');
-    }
+    // Simplified flow for Fish, Spawn, Fingerling, Feed — includes location + phone
+    if (isSimpleCategory(catLower)) {
+        if (!result.quantity) missing.push('quantity');
+        if (!result.unit) missing.push('unit');
+        if (!result.price) missing.push('price');
+        if (!result.mrp) missing.push('mrp');
+        if (!result.district) missing.push('district');
+        if (!result.localDistrict) missing.push('localDistrict');
+        if (!result.policeStation) missing.push('policeStation');
+        if (!result.phoneNumber) missing.push('phoneNumber');
+    } else {
+        if (result.actionType === 'buying') {
+            if (catLower === 'fish' && !result.fishSize) missing.push('fishSize');
+            if (catLower === 'feed' && !result.feedType) missing.push('feedType');
+            if ((catLower === 'feed' || catLower === 'medicine') && !result.packingSize) missing.push('packingSize');
+        }
 
-    if (!result.quantity) missing.push('quantity');
-    if (!result.unit) missing.push('unit');
-    if (!result.price) missing.push('price');
-    if (!result.district) missing.push('district');
-    if (!result.localDistrict) missing.push('localDistrict');
-    if (!result.policeStation) missing.push('policeStation');
-    if (!result.phoneNumber) missing.push('phoneNumber');
+        const isEquipmentSelling = result.actionType === 'selling' && catLower === 'equipment';
+        if (!isEquipmentSelling) {
+            if (!result.quantity) missing.push('quantity');
+            if (!result.unit) missing.push('unit');
+        }
+        if (!result.price) missing.push('price');
+        if (!result.district) missing.push('district');
+        if (!result.localDistrict) missing.push('localDistrict');
+        if (!result.policeStation) missing.push('policeStation');
+        if (!result.phoneNumber) missing.push('phoneNumber');
+    }
 
     result.missingFields = missing;
 
@@ -781,8 +1117,10 @@ function formatFormResponse(result, user, language) {
     if (nextField) {
         nextQuestion = getQuestion(nextField, language, result);
     } else {
+        const isBuying = result.actionType === 'buying';
         // All fields collected — generate summary
-        result.nextField = result.actionType === 'buying' ? 'review' : 'media';
+        // Simple categories (Fish/Spawn/Fingerling) sell goes to 'media', buy/other go to 'review'
+        result.nextField = (!isBuying && isSimpleCategory(catLower)) ? 'media' : (isBuying ? 'review' : 'media');
         result.isComplete = true;
 
         const isEquipment = catLower === 'equipment';
@@ -790,7 +1128,7 @@ function formatFormResponse(result, user, language) {
         const qtyText = (!isEquipment && result.quantity) ? `${result.quantity} ${result.unit || ''}`.trim() : '';
         const priceText = result.price ? (isEquipment ? `₹${result.price}` : `₹${result.price}/${result.unit || 'unit'}`) : '';
         const mrpText = result.mrp ? `₹${result.mrp}` : '';
-        const isBuying = result.actionType === 'buying';
+
 
         if (isBuying) {
             // Build a nice buying summary
@@ -815,9 +1153,57 @@ function formatFormResponse(result, user, language) {
                 or: `✅ ଆପଣଙ୍କ **କ୍ରୟ ଆବଶ୍ୟକତା**:\n\n${summary}\n\nଏହା ତିଆରି କରିବ? **"ହଁ"** କୁହନ୍ତୁ ଫର୍ମ ଅଟୋଫିଲ ହୋଇଯିବ।`
             }[language] || '';
             nextQuestion = confirmQuestion;
+        } else if (isSimpleCategory(catLower)) {
+            // ── Simplified sell flow: Fish / Spawn / Fingerling / Feed ──
+            // Always attempt Groq description (includes location + price data)
+            let desc = null;
+            try {
+                desc = await generateDescriptionWithGroq(result, language);
+            } catch (err) {
+                console.error('Groq description generator failed:', err.message);
+            }
+            if (!desc) {
+                // Fallback description with full location details
+                if (language === 'bn') {
+                    desc = `বিক্রয়ের জন্য উপলব্ধ: ${result.productName} (${result.category})${qtyText ? `, পরিমাণ: ${qtyText}` : ''}${priceText ? `, মূল্য: ${priceText}` : ''}${mrpText ? `, MRP: ${mrpText}` : ''}${locationText ? `, স্থান: ${locationText}` : ''}। আগ্রহী ক্রেতারা যোগাযোগ করুন।`;
+                } else if (language === 'hi') {
+                    desc = `बिक्री के लिए उपलब्ध: ${result.productName} (${result.category})${qtyText ? `, मात्रा: ${qtyText}` : ''}${priceText ? `, मूल्य: ${priceText}` : ''}${mrpText ? `, MRP: ${mrpText}` : ''}${locationText ? `, स्थान: ${locationText}` : ''}। संपर्क करें।`;
+                } else if (language === 'or') {
+                    desc = `ବିକ୍ରୟ ପାଇଁ: ${result.productName} (${result.category})${qtyText ? `, ପରିମାଣ: ${qtyText}` : ''}${priceText ? `, ମୂଲ୍ୟ: ${priceText}` : ''}${mrpText ? `, MRP: ${mrpText}` : ''}${locationText ? `, ସ୍ଥାନ: ${locationText}` : ''}। ଯୋଗାଯୋଗ କରନ୍ତୁ।`;
+                } else {
+                    desc = `Fresh stock for sale: ${result.productName} (${result.category})${qtyText ? `, Qty: ${qtyText}` : ''}${priceText ? `, Price: ${priceText}` : ''}${mrpText ? `, MRP: ${mrpText}` : ''}${locationText ? `. Location: ${locationText}` : ''}. Contact for details.`;
+                }
+            }
+            result.description = desc;
+
+            const simSummaryLines = [];
+            if (result.category) simSummaryLines.push(`📦 **Category:** ${result.category}`);
+            if (result.productName) simSummaryLines.push(`🏷️ **Product:** ${result.productName}`);
+            if (qtyText) simSummaryLines.push(`📊 **Quantity:** ${qtyText}`);
+            if (priceText) simSummaryLines.push(`💰 **Price:** ${priceText}`);
+            if (mrpText) simSummaryLines.push(`🏷️ **MRP / Original Price:** ${mrpText}`);
+            if (locationText) simSummaryLines.push(`📍 **Location:** ${locationText}`);
+            if (result.phoneNumber) simSummaryLines.push(`📱 **Contact:** ${result.phoneNumber}`);
+            const simSummary = simSummaryLines.join('\n');
+
+            nextQuestion = {
+                en: `✅ Great! Here is your listing summary:\n\n${simSummary}\n\n📝 Description (by AI): "${desc}"\n\n📸 Please upload images or a video of the product to complete the listing.`,
+                bn: `✅ চমৎকার! আপনার লিস্টিং সারসংক্ষেপ:\n\n${simSummary}\n\n📝 বিবরণ (AI দ্বারা): "${desc}"\n\n📸 এখন পণ্যের ছবি বা ভিডিও আপলোড করুন।`,
+                hi: `✅ बढ़िया! आपकी लिस्टिंग सारांश:\n\n${simSummary}\n\n📝 विवरण (AI द्वारा): "${desc}"\n\n📸 अब उत्पाद की फ़ोटो या वीडियो अपलोड करें।`,
+                or: `✅ ବହୁତ ଭଲ! ଆପଣଙ୍କ ଲିଷ୍ଟିଂ ସାରାଂଶ:\n\n${simSummary}\n\n📝 ବିବରଣୀ (AI ଦ୍ୱାରା): "${desc}"\n\n📸 ଏବେ ଉତ୍ପାଦର ଫୋଟୋ ବା ଭିଡିଓ ଅପଲୋଡ କରନ୍ତୁ।`
+            }[language] || '';
+
         } else {
             // Sell flow — generate description
-            if (isEquipment) {
+            let desc = null;
+            try {
+                desc = await generateDescriptionWithGroq(result, language);
+            } catch (err) {
+                console.error('Groq description generator failed:', err.message);
+            }
+            if (desc) {
+                result.description = desc;
+            } else if (isEquipment) {
                 if (language === 'bn') {
                     result.description = `বিক্রয়ের জন্য সরঞ্জাম: ${result.productName}${priceText ? `, মূল্য: ${priceText}` : ''}${mrpText ? `, আসল মূল্য: ${mrpText}` : ''}${locationText ? `, স্থান: ${locationText}` : ''}। আগ্রহী ক্রেতারা যোগাযোগ করুন।`;
                 } else if (language === 'hi') {

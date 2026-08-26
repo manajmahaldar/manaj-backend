@@ -64,8 +64,8 @@ router.post(
         body('email').optional({ checkFalsy: true }).isEmail().withMessage('Invalid email address').normalizeEmail(),
         body('phone').optional({ checkFalsy: true }).isMobilePhone('en-IN').withMessage('Invalid Indian phone number'),
         body('password')
-            .isStrongPassword({ minLength: 8, minUppercase: 1, minLowercase: 1, minNumbers: 1, minSymbols: 1 })
-            .withMessage('Password must be 8+ chars with uppercase, lowercase, number, and symbol'),
+            .matches(/^[0-9]{6}$/)
+            .withMessage('Password must be exactly 6 digits'),
         body('district').notEmpty().withMessage('District is required'),
     ],
     handleValidationErrors,
@@ -132,8 +132,8 @@ router.post(
     passwordLimiter,
     [
         body('password')
-            .isStrongPassword({ minLength: 8, minUppercase: 1, minLowercase: 1, minNumbers: 1, minSymbols: 1 })
-            .withMessage('Strong password is required'),
+            .matches(/^[0-9]{6}$/)
+            .withMessage('Password must be exactly 6 digits'),
     ],
     handleValidationErrors,
     authCtrl.resetPassword
