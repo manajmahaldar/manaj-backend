@@ -1,31 +1,30 @@
 const nodemailer = require('nodemailer');
 
 const sendEmail = async (options) => {
-    const isGmail = process.env.EMAIL_HOST?.includes('gmail');
+    const host = process.env.EMAIL_HOST || 'smtp.gmail.com';
+    const user = process.env.EMAIL_USER || 'manojmahaldar10@gmail.com';
+    const pass = process.env.EMAIL_PASS || 'hhue cukd zjvp tpqr';
+    const port = parseInt(process.env.EMAIL_PORT || '587', 10);
+
+    const isGmail = host.includes('gmail');
 
     const transporter = nodemailer.createTransport(
         isGmail
             ? {
                   service: 'gmail',
-                  connectionTimeout: 8000,
-                  socketTimeout: 8000,
-                  greetingTimeout: 8000,
-                  auth: {
-                      user: process.env.EMAIL_USER,
-                      pass: process.env.EMAIL_PASS,
-                  },
+                  connectionTimeout: 10000,
+                  socketTimeout: 10000,
+                  greetingTimeout: 10000,
+                  auth: { user, pass },
               }
             : {
-                  host: process.env.EMAIL_HOST,
-                  port: parseInt(process.env.EMAIL_PORT || '587', 10),
-                  secure: process.env.EMAIL_PORT === '465',
-                  connectionTimeout: 8000,
-                  socketTimeout: 8000,
-                  greetingTimeout: 8000,
-                  auth: {
-                      user: process.env.EMAIL_USER,
-                      pass: process.env.EMAIL_PASS,
-                  },
+                  host,
+                  port,
+                  secure: port === 465,
+                  connectionTimeout: 10000,
+                  socketTimeout: 10000,
+                  greetingTimeout: 10000,
+                  auth: { user, pass },
               }
     );
 
