@@ -582,9 +582,17 @@ exports.forgotPassword = async (req, res) => {
 
         await AuditLog.record({ userId: user._id, action: 'password_reset_request', req });
 
-        const baseUrl = (process.env.FRONTEND_URL && !process.env.FRONTEND_URL.includes('localhost')) 
-            ? process.env.FRONTEND_URL 
-            : (req.headers.origin || process.env.FRONTEND_URL || 'https://monaj-frontend.vercel.app');
+        let baseUrl = process.env.FRONTEND_URL;
+        if (req.headers.origin && !req.headers.origin.includes('localhost')) {
+            baseUrl = req.headers.origin;
+        } else if (req.headers.referer && !req.headers.referer.includes('localhost')) {
+            try {
+                baseUrl = new URL(req.headers.referer).origin;
+            } catch (e) {}
+        }
+        if (!baseUrl) {
+            baseUrl = 'https://www.matsyalink.com';
+        }
 
         const resetUrl = `${baseUrl.replace(/\/$/, '')}/reset-password/${resetToken}`;
 
