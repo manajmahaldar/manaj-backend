@@ -14,7 +14,7 @@ const sendEmail = async (options) => {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    from: process.env.EMAIL_FROM || 'Monaj Platform <onboarding@resend.dev>',
+                    from: process.env.RESEND_FROM || 'Monaj Platform <onboarding@resend.dev>',
                     to: [options.email],
                     subject: options.subject,
                     text: options.message,
