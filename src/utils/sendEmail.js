@@ -4,29 +4,22 @@ const sendEmail = async (options) => {
     const host = process.env.EMAIL_HOST || 'smtp.gmail.com';
     const user = process.env.EMAIL_USER || 'manojmahaldar10@gmail.com';
     const pass = process.env.EMAIL_PASS || 'hhue cukd zjvp tpqr';
-    const port = parseInt(process.env.EMAIL_PORT || '587', 10);
+    const port = parseInt(process.env.EMAIL_PORT || '465', 10);
+    const secure = port === 465 || host.includes('gmail');
 
-    const isGmail = host.includes('gmail');
-
-    const transporter = nodemailer.createTransport(
-        isGmail
-            ? {
-                  service: 'gmail',
-                  connectionTimeout: 10000,
-                  socketTimeout: 10000,
-                  greetingTimeout: 10000,
-                  auth: { user, pass },
-              }
-            : {
-                  host,
-                  port,
-                  secure: port === 465,
-                  connectionTimeout: 10000,
-                  socketTimeout: 10000,
-                  greetingTimeout: 10000,
-                  auth: { user, pass },
-              }
-    );
+    const transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure,
+        service: host.includes('gmail') ? 'gmail' : undefined,
+        connectionTimeout: 12000,
+        socketTimeout: 12000,
+        greetingTimeout: 12000,
+        auth: { user, pass },
+        tls: {
+            rejectUnauthorized: false
+        }
+    });
 
     const mailOptions = {
         from: `Monaj Platform <${process.env.EMAIL_FROM || process.env.EMAIL_USER || 'noreply@monaj.com'}>`,

@@ -562,7 +562,6 @@ exports.googleLogin = async (req, res) => {
 exports.forgotPassword = async (req, res) => {
     const { email } = req.body;
 
-    // Always return 200 — never reveal whether email exists (prevent enumeration)
     const genericResponse = { msg: 'If an account with that email exists, a reset link has been sent.' };
 
     if (!email || !validator.isEmail(email)) {
@@ -570,7 +569,8 @@ exports.forgotPassword = async (req, res) => {
     }
 
     try {
-        const user = await User.findOne({ email }).select('+resetPasswordToken +resetPasswordExpires');
+        const normalizedEmail = email.toLowerCase().trim();
+        const user = await User.findOne({ email: normalizedEmail }).select('+resetPasswordToken +resetPasswordExpires');
         if (!user) {
             return res.status(200).json(genericResponse);
         }
@@ -616,11 +616,7 @@ exports.forgotPassword = async (req, res) => {
                 `
             });
         } catch (emailErr) {
-            console.error('[Forgot Password Email Failure]:', emailErr);
-            user.resetPasswordToken   = undefined;
-            user.resetPasswordExpires = undefined;
-            await user.save();
-            return res.status(500).json({ msg: 'Failed to send password reset email. Please try again later or contact support.' });
+            console.error('[Forgot Password Email Warning]:', emailErr.message || emailErr);
         }
 
         return res.status(200).json(genericResponse);
