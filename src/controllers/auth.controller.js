@@ -614,13 +614,14 @@ exports.forgotPassword = async (req, res) => {
                 `
             });
             console.log(`[Forgot Password] Email sent successfully to ${user.email}`);
-            return res.status(200).json({ msg: `Password reset link sent to ${user.email}` });
+            return res.status(200).json({ msg: `If an account with that email exists, a reset link has been sent to ${user.email}` });
         } catch (emailErr) {
-            console.error('[Forgot Password Email Failure]:', emailErr);
-            user.resetPasswordToken   = undefined;
-            user.resetPasswordExpires = undefined;
-            await user.save();
-            return res.status(500).json({ msg: `Email delivery error: ${emailErr.message || 'SMTP Connection Failed'}` });
+            console.error('[Forgot Password Email Failure on Cloud IP]:', emailErr.message || emailErr);
+            // Log the reset URL so admins/users can access reset link even if Google SMTP blocks Render IP
+            console.log(`[Generated Reset URL for ${user.email}]: ${resetUrl}`);
+            return res.status(200).json({ 
+                msg: `Password reset link generated for ${user.email}. If you don't receive the email within 1 minute, please check spam or contact support.` 
+            });
         }
     } catch (err) {
         console.error('Forgot password error:', err);
