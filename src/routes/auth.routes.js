@@ -61,7 +61,7 @@ router.post(
     strictAuthLimiter,
     [
         body('name').notEmpty().withMessage('Name is required').trim(),
-        body('email').optional({ checkFalsy: true }).isEmail().withMessage('Invalid email address').normalizeEmail(),
+        body('email').optional({ checkFalsy: true }).isEmail().withMessage('Invalid email address'),
         body('phone').optional({ checkFalsy: true }).isMobilePhone('en-IN').withMessage('Invalid Indian phone number'),
         body('password')
             .matches(/^[0-9]{6}$/)
@@ -118,7 +118,7 @@ router.post(
     '/forgot-password',
     passwordLimiter,
     [
-        body('email').isEmail().withMessage('Valid email is required').normalizeEmail(),
+        body('email').isEmail().withMessage('Valid email is required'),
     ],
     handleValidationErrors,
     authCtrl.forgotPassword

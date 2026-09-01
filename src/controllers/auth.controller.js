@@ -150,9 +150,9 @@ exports.register = async (req, res) => {
             policeStation,
             role: role || 'farmer',
             accountStatus: 'pending',
-            trustScore: fraudResult.score,
+            trustScore: fraudResult.trustScore,
             isFlagged: fraudResult.isFlagged,
-            fraudReason: fraudResult.reasons.join('; '),
+            fraudReason: fraudResult.reason,
             registrationIp: req.ip
         });
         await user.save();
@@ -499,6 +499,8 @@ exports.googleLogin = async (req, res) => {
                 profilePicture: picture,
                 role:           role || 'farmer',
                 district:       district || '',
+                localDistrict:  '',
+                policeStation:  '',
                 accountStatus:  'pending',
                 registrationIp: req.ip || '',
                 trustScore:     fraudResult.trustScore,
