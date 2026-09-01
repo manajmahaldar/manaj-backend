@@ -582,7 +582,11 @@ exports.forgotPassword = async (req, res) => {
 
         await AuditLog.record({ userId: user._id, action: 'password_reset_request', req });
 
-        const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+        const baseUrl = (process.env.FRONTEND_URL && !process.env.FRONTEND_URL.includes('localhost')) 
+            ? process.env.FRONTEND_URL 
+            : (req.headers.origin || process.env.FRONTEND_URL || 'https://monaj-frontend.vercel.app');
+
+        const resetUrl = `${baseUrl.replace(/\/$/, '')}/reset-password/${resetToken}`;
 
         try {
             await sendEmail({
@@ -604,10 +608,11 @@ exports.forgotPassword = async (req, res) => {
                 `
             });
         } catch (emailErr) {
-            console.error('Password reset email error:', emailErr);
+            console.error('[Forgot Password Email Failure]:', emailErr);
             user.resetPasswordToken   = undefined;
             user.resetPasswordExpires = undefined;
             await user.save();
+            return res.status(500).json({ msg: 'Failed to send password reset email. Please try again later or contact support.' });
         }
 
         return res.status(200).json(genericResponse);
