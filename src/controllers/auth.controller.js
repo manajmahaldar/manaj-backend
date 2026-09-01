@@ -594,35 +594,32 @@ exports.forgotPassword = async (req, res) => {
 
         const resetUrl = `${baseUrl.replace(/\/$/, '')}/reset-password/${resetToken}`;
 
-        try {
-            await sendEmail({
-                email:   user.email,
-                subject: 'Password Reset — Monaj',
-                message: `Reset your password: ${resetUrl}`,
-                html: `
-                    <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;border:1px solid #e0e0e0;border-radius:10px">
-                        <h2 style="color:#333;text-align:center">Password Reset Request</h2>
-                        <p>Hi ${user.name},</p>
-                        <p>You requested a password reset for your Monaj account. Click the button below — this link expires in <strong>10 minutes</strong>.</p>
-                        <div style="text-align:center;margin:30px 0">
-                            <a href="${resetUrl}" style="background:#16a34a;color:#fff;padding:12px 28px;text-decoration:none;border-radius:6px;font-weight:bold">Reset Password</a>
-                        </div>
-                        <p>If you didn't request this, ignore this email.</p>
-                        <hr style="border:0;border-top:1px solid #eee;margin:20px 0">
-                        <p style="font-size:12px;color:#888;text-align:center">&copy; 2026 Monaj Platform. All rights reserved.</p>
+        // Dispatch email asynchronously so HTTP response returns instantly (< 200ms)
+        sendEmail({
+            email:   user.email,
+            subject: 'Password Reset — Monaj',
+            message: `Reset your password: ${resetUrl}`,
+            html: `
+                <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;border:1px solid #e0e0e0;border-radius:10px">
+                    <h2 style="color:#333;text-align:center">Password Reset Request</h2>
+                    <p>Hi ${user.name},</p>
+                    <p>You requested a password reset for your Monaj account. Click the button below — this link expires in <strong>10 minutes</strong>.</p>
+                    <div style="text-align:center;margin:30px 0">
+                        <a href="${resetUrl}" style="background:#16a34a;color:#fff;padding:12px 28px;text-decoration:none;border-radius:6px;font-weight:bold">Reset Password</a>
                     </div>
-                `
-            });
-            console.log(`[Forgot Password] Email sent successfully to ${user.email}`);
-            return res.status(200).json({ msg: `If an account with that email exists, a reset link has been sent to ${user.email}` });
-        } catch (emailErr) {
-            console.error('[Forgot Password Email Failure on Cloud IP]:', emailErr.message || emailErr);
-            // Log the reset URL so admins/users can access reset link even if Google SMTP blocks Render IP
+                    <p>If you didn't request this, ignore this email.</p>
+                    <hr style="border:0;border-top:1px solid #eee;margin:20px 0">
+                    <p style="font-size:12px;color:#888;text-align:center">&copy; 2026 Monaj Platform. All rights reserved.</p>
+                </div>
+            `
+        }).then(() => {
+            console.log(`[Forgot Password] Email dispatch finished for ${user.email}`);
+        }).catch((emailErr) => {
+            console.error('[Forgot Password Email Failure]:', emailErr.message || emailErr);
             console.log(`[Generated Reset URL for ${user.email}]: ${resetUrl}`);
-            return res.status(200).json({ 
-                msg: `Password reset link generated for ${user.email}. If you don't receive the email within 1 minute, please check spam or contact support.` 
-            });
-        }
+        });
+
+        return res.status(200).json({ msg: 'If an account with that email exists, a reset link has been sent.' });
     } catch (err) {
         console.error('Forgot password error:', err);
         return res.status(500).json({ msg: 'Server error' });
