@@ -562,17 +562,15 @@ exports.googleLogin = async (req, res) => {
 exports.forgotPassword = async (req, res) => {
     const { email } = req.body;
 
-    const genericResponse = { msg: 'If an account with that email exists, a reset link has been sent.' };
-
     if (!email || !validator.isEmail(email)) {
-        return res.status(200).json(genericResponse);
+        return res.status(400).json({ msg: 'Please provide a valid email address.' });
     }
 
     try {
         const normalizedEmail = email.toLowerCase().trim();
         const user = await User.findOne({ email: normalizedEmail }).select('+resetPasswordToken +resetPasswordExpires');
         if (!user) {
-            return res.status(200).json(genericResponse);
+            return res.status(404).json({ msg: 'No account registered with this email address.' });
         }
 
         const resetToken = crypto.randomBytes(32).toString('hex');
@@ -615,11 +613,15 @@ exports.forgotPassword = async (req, res) => {
                     </div>
                 `
             });
+            console.log(`[Forgot Password] Email sent successfully to ${user.email}`);
+            return res.status(200).json({ msg: `Password reset link sent to ${user.email}` });
         } catch (emailErr) {
-            console.error('[Forgot Password Email Warning]:', emailErr.message || emailErr);
+            console.error('[Forgot Password Email Failure]:', emailErr);
+            user.resetPasswordToken   = undefined;
+            user.resetPasswordExpires = undefined;
+            await user.save();
+            return res.status(500).json({ msg: `Email delivery error: ${emailErr.message || 'SMTP Connection Failed'}` });
         }
-
-        return res.status(200).json(genericResponse);
     } catch (err) {
         console.error('Forgot password error:', err);
         return res.status(500).json({ msg: 'Server error' });
