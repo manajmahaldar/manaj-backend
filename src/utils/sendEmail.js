@@ -7,6 +7,7 @@ const sendEmail = async (options) => {
     if (brevoApiKey && brevoApiKey.trim()) {
         try {
             const senderEmail = process.env.EMAIL_USER || 'manojmahaldar10@gmail.com';
+            console.log(`[Brevo API Attempt] Sending email to ${options.email}...`);
             const response = await fetch('https://api.brevo.com/v3/smtp/email', {
                 method: 'POST',
                 headers: {
@@ -26,10 +27,10 @@ const sendEmail = async (options) => {
             });
             const data = await response.json();
             if (response.ok) {
-                console.log(`[Brevo API Sent] To: ${options.email} | MessageId: ${data.messageId}`);
+                console.log(`[Brevo API Sent Successfully] To: ${options.email} | MessageId: ${data.messageId || data.id}`);
                 return data;
             }
-            console.error('[Brevo API Error]:', data);
+            console.error('[Brevo API Response Error]:', JSON.stringify(data));
         } catch (err) {
             console.error('[Brevo API Fetch Error]:', err.message);
         }
