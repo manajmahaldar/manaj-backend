@@ -3,6 +3,12 @@ const nodemailer = require('nodemailer');
 const sendEmail = async (options) => {
     const brevoApiKey = process.env.BREVO_API_KEY;
 
+    console.log("[Brevo Config]", {
+        keyExists: Boolean(brevoApiKey),
+        keyLength: brevoApiKey?.trim().length || 0,
+        keyPrefix: brevoApiKey?.trim().slice(0, 8) || null
+    });
+
     // 1. Brevo (Sendinblue) HTTP API — 100% Reliable over HTTPS (Port 443)
     if (brevoApiKey && brevoApiKey.trim()) {
         try {

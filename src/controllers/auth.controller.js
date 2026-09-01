@@ -665,3 +665,36 @@ exports.resetPassword = async (req, res) => {
         return res.status(500).json({ msg: 'Server error' });
     }
 };
+
+// ── Temporary Diagnostic Endpoint ──────────────────────────────────────────────
+exports.testBrevo = async (req, res) => {
+    const brevoApiKey = process.env.BREVO_API_KEY;
+    if (!brevoApiKey || !brevoApiKey.trim()) {
+        return res.json({
+            keyLoaded: false,
+            brevoAuthenticated: false,
+            brevoStatus: null
+        });
+    }
+
+    try {
+        const response = await fetch('https://api.brevo.com/v3/account', {
+            method: 'GET',
+            headers: {
+                'api-key': brevoApiKey.trim(),
+                'Accept': 'application/json'
+            }
+        });
+        return res.json({
+            keyLoaded: true,
+            brevoAuthenticated: response.ok,
+            brevoStatus: response.status
+        });
+    } catch (err) {
+        return res.json({
+            keyLoaded: true,
+            brevoAuthenticated: false,
+            brevoStatus: 500
+        });
+    }
+};

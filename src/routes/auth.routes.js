@@ -139,4 +139,9 @@ router.post(
     authCtrl.resetPassword
 );
 
+// @route   GET /api/auth/test-brevo
+// @desc    Temporary Brevo key verification diagnostic
+// @access  Public
+router.get('/test-brevo', authCtrl.testBrevo);
+
 module.exports = router;
