@@ -51,7 +51,7 @@ Rules:
 
 async function classifyIntentWithGroq(message) {
     const apiKey = process.env.GROQ_API_KEY;
-    const model = process.env.GROQ_MARKETPLACE_MODEL || 'openai/gpt-oss-120b';
+    const model = process.env.GROQ_MARKETPLACE_MODEL || 'llama-3.3-70b-versatile';
     if (!apiKey) return null;
 
     try {
@@ -90,7 +90,7 @@ Return a JSON object in this format:
 
 async function extractFieldsWithGroq(message, currentState) {
     const apiKey = process.env.GROQ_API_KEY;
-    const model = process.env.GROQ_MARKETPLACE_MODEL || 'openai/gpt-oss-120b';
+    const model = process.env.GROQ_MARKETPLACE_MODEL || 'llama-3.3-70b-versatile';
     if (!apiKey) {
         throw new Error('Groq API Key is not configured.');
     }
@@ -121,7 +121,7 @@ Extract the updated fields in JSON format:`;
 
 async function generateDescriptionWithGroq(result, language) {
     const apiKey = process.env.GROQ_API_KEY;
-    const model = process.env.GROQ_MARKETPLACE_MODEL || 'openai/gpt-oss-120b';
+    const model = process.env.GROQ_MARKETPLACE_MODEL || 'llama-3.3-70b-versatile';
     if (!apiKey) return null;
     try {
         const groq = new Groq({ apiKey });

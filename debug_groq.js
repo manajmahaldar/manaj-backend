@@ -6,7 +6,7 @@ require('dotenv/config');
 const Groq = require('groq-sdk');
 
 const apiKey = process.env.GROQ_API_KEY;
-const model  = process.env.GROQ_FARMING_MODEL || 'openai/gpt-oss-120b';
+const model  = process.env.GROQ_FARMING_MODEL || 'llama-3.3-70b-versatile';
 
 console.log('API Key loaded:', apiKey ? `${apiKey.slice(0,10)}...` : 'MISSING');
 console.log('Model:', model);

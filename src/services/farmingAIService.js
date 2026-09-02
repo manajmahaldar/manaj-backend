@@ -205,7 +205,7 @@ async function processFarmingAI({
     let confidence = 'medium';
 
     const apiKey = process.env.GROQ_API_KEY;
-    const model = process.env.GROQ_FARMING_MODEL || 'openai/gpt-oss-120b';
+    const model = process.env.GROQ_FARMING_MODEL || 'llama-3.3-70b-versatile';
 
     if (apiKey) {
         try {
@@ -299,7 +299,7 @@ Latest User Question (ANSWER THIS QUESTION DIRECTLY): ${rawQuery}`;
             }
         } catch (apiErr) {
             console.error('Groq LLM API Call Error or JSON parse failure:', apiErr.message);
-            throw apiErr;
+            console.warn('Falling back to rule-based Farming AI knowledge engine.');
         }
     }
 
