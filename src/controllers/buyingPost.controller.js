@@ -59,7 +59,8 @@ exports.createPost = async (req, res) => {
             photos,
             isFlagged: fraudResult.isFlagged,
             fraudReason: fraudResult.reason,
-            fraudScore: fraudResult.fraudScore
+            fraudScore: fraudResult.fraudScore,
+            status: fraudResult.isFlagged ? 'pending' : 'approved'
         });
 
         await newPost.save();
